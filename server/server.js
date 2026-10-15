@@ -51,7 +51,7 @@ const startServer = async () => {
 
     initializeSocket(httpServer);
 
-    const PORT = Number(process.env.PORT || 4000);
+    const PORT = Number(process.env.PORT || 3000);
 
     httpServer.on("error", (error) => {
       if (error.code === "EADDRINUSE") {

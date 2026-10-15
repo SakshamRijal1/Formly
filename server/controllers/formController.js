@@ -1,3 +1,4 @@
+
 import mongoose from "mongoose";
 import Form from "../models/Form.js";
 import Response from "../models/Response.js";
@@ -16,22 +17,73 @@ const validateQuestions = (questions) => {
     "time",
     "number",
     "file-upload",
+    "image-upload",
+    "rating",
   ];
 
   return questions.every((q) => {
-    if (!q || typeof q.title !== "string" || !q.title.trim()) return false;
+    if (!q || typeof q.title !== "string" || !q.title.trim()) {
+      return false;
+    }
+
     if (!allowedTypes.includes(q.type)) return false;
 
+    // Choice options are required only for choice-based questions.
     if (
       ["multiple-choice", "checkboxes", "dropdown"].includes(q.type) &&
-      (!Array.isArray(q.options) ||
+      (
+        !Array.isArray(q.options) ||
         q.options.length === 0 ||
         q.options.length > 100 ||
         !q.options.every(
-          (option) => typeof option === "string" && option.trim()
-        ))
+          (option) =>
+            typeof option === "string" && option.trim().length > 0
+        )
+      )
     ) {
       return false;
+    }
+
+    // Rating configuration is optional.
+    if (q.type === "rating" && q.ratingSettings != null) {
+      const { scale, icon } = q.ratingSettings;
+
+      if (
+        scale !== undefined &&
+        ![5, 10].includes(Number(scale))
+      ) {
+        return false;
+      }
+
+      if (
+        icon !== undefined &&
+        !["star", "heart", "thumb"].includes(icon)
+      ) {
+        return false;
+      }
+    }
+
+    // File upload configuration is optional.
+    if (
+      q.type === "file-upload" &&
+      q.fileUploadSettings != null
+    ) {
+      const { maxFiles, maxSizeMB } = q.fileUploadSettings;
+
+      // Formly currently supports one file per question.
+      if (
+        maxFiles !== undefined &&
+        Number(maxFiles) !== 1
+      ) {
+        return false;
+      }
+
+      if (
+        maxSizeMB !== undefined &&
+        ![1, 5, 10, 20].includes(Number(maxSizeMB))
+      ) {
+        return false;
+      }
     }
 
     return true;
@@ -59,7 +111,11 @@ export const getMyForms = async (req, res, next) => {
 
     if (typeof search === "string" && search.trim()) {
       const safeSearch = search.trim().slice(0, 100);
-      filter.title = { $regex: safeSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
+
+      filter.title = {
+        $regex: safeSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+        $options: "i",
+      };
     }
 
     const forms = await Form.find(filter).sort({ updatedAt: -1 });
@@ -69,6 +125,7 @@ export const getMyForms = async (req, res, next) => {
     next(error);
   }
 };
+
 export const getPublicForm = async (req, res, next) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {
@@ -83,7 +140,6 @@ export const getPublicForm = async (req, res, next) => {
     })
       .select("+owner")
       .populate("owner");
-   
 
     if (!form) {
       return res.status(404).json({
@@ -102,7 +158,9 @@ export const getPublicForm = async (req, res, next) => {
 export const getOwnedForm = async (req, res, next) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {
-      return res.status(404).json({ message: "Form not found." });
+      return res.status(404).json({
+        message: "Form not found.",
+      });
     }
 
     const form = await Form.findOne({
@@ -111,7 +169,9 @@ export const getOwnedForm = async (req, res, next) => {
     });
 
     if (!form) {
-      return res.status(404).json({ message: "Form not found." });
+      return res.status(404).json({
+        message: "Form not found.",
+      });
     }
 
     res.json({ form });
@@ -127,16 +187,29 @@ export const updateForm = async (req, res, next) => {
     const updates = {};
 
     if (title !== undefined) {
-      if (typeof title !== "string" || !title.trim() || title.length > 200) {
-        return res.status(400).json({ message: "Invalid form title." });
+      if (
+        typeof title !== "string" ||
+        !title.trim() ||
+        title.length > 200
+      ) {
+        return res.status(400).json({
+          message: "Invalid form title.",
+        });
       }
+
       updates.title = title.trim();
     }
 
     if (description !== undefined) {
-      if (typeof description !== "string" || description.length > 5000) {
-        return res.status(400).json({ message: "Invalid description." });
+      if (
+        typeof description !== "string" ||
+        description.length > 5000
+      ) {
+        return res.status(400).json({
+          message: "Invalid description.",
+        });
       }
+
       updates.description = description;
     }
 
@@ -146,6 +219,7 @@ export const updateForm = async (req, res, next) => {
           message: "Questions contain invalid fields or options.",
         });
       }
+
       updates.questions = questions;
     }
 
@@ -153,48 +227,59 @@ export const updateForm = async (req, res, next) => {
       updates.theme = theme;
     }
 
-  if (settings !== undefined) {
-  if (
-    !settings ||
-    typeof settings !== "object" ||
-    Array.isArray(settings)
-  ) {
-    return res.status(400).json({
-      message: "Invalid form settings.",
-    });
-  }
+    if (settings !== undefined) {
+      if (
+        !settings ||
+        typeof settings !== "object" ||
+        Array.isArray(settings)
+      ) {
+        return res.status(400).json({
+          message: "Invalid form settings.",
+        });
+      }
 
-  const allowedSettings = [
-    "collectEmail",
-    "shuffleQuestions",
-    "limitOneResponse",
-  ];
+      const allowedSettings = [
+        "collectEmail",
+        "shuffleQuestions",
+        "limitOneResponse",
+      ];
 
-  for (const key of allowedSettings) {
-    if (
-      settings[key] !== undefined &&
-      typeof settings[key] !== "boolean"
-    ) {
-      return res.status(400).json({
-        message: `${key} must be true or false.`,
-      });
+      for (const key of allowedSettings) {
+        if (
+          settings[key] !== undefined &&
+          typeof settings[key] !== "boolean"
+        ) {
+          return res.status(400).json({
+            message: `${key} must be true or false.`,
+          });
+        }
+      }
+
+      updates.settings = settings;
     }
-  }
-
-  updates.settings = settings;
-}
 
     const form = await Form.findOneAndUpdate(
-      { _id: req.params.id, owner: req.user._id },
+      {
+        _id: req.params.id,
+        owner: req.user._id,
+      },
       { $set: updates },
-      { new: true, runValidators: true }
+      {
+        new: true,
+        runValidators: true,
+      }
     );
 
     if (!form) {
-      return res.status(404).json({ message: "Form not found." });
+      return res.status(404).json({
+        message: "Form not found.",
+      });
     }
 
-    res.json({ message: "Form saved successfully.", form });
+    res.json({
+      message: "Form saved successfully.",
+      form,
+    });
   } catch (error) {
     next(error);
   }
@@ -208,7 +293,9 @@ export const publishForm = async (req, res, next) => {
     });
 
     if (!form) {
-      return res.status(404).json({ message: "Form not found." });
+      return res.status(404).json({
+        message: "Form not found.",
+      });
     }
 
     if (!form.questions.length) {
@@ -219,6 +306,7 @@ export const publishForm = async (req, res, next) => {
 
     form.isPublished = true;
     form.publishedAt = form.publishedAt || new Date();
+
     await form.save();
 
     res.json({
@@ -234,16 +322,24 @@ export const publishForm = async (req, res, next) => {
 export const unpublishForm = async (req, res, next) => {
   try {
     const form = await Form.findOneAndUpdate(
-      { _id: req.params.id, owner: req.user._id },
+      {
+        _id: req.params.id,
+        owner: req.user._id,
+      },
       { $set: { isPublished: false } },
       { new: true }
     );
 
     if (!form) {
-      return res.status(404).json({ message: "Form not found." });
+      return res.status(404).json({
+        message: "Form not found.",
+      });
     }
 
-    res.json({ message: "Form unpublished.", form });
+    res.json({
+      message: "Form unpublished.",
+      form,
+    });
   } catch (error) {
     next(error);
   }
@@ -257,12 +353,16 @@ export const deleteForm = async (req, res, next) => {
     });
 
     if (!form) {
-      return res.status(404).json({ message: "Form not found." });
+      return res.status(404).json({
+        message: "Form not found.",
+      });
     }
 
     await Response.deleteMany({ form: form._id });
 
-    res.json({ message: "Form and its responses deleted." });
+    res.json({
+      message: "Form and its responses deleted.",
+    });
   } catch (error) {
     next(error);
   }

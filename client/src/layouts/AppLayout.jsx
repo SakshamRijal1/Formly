@@ -113,9 +113,22 @@ useEffect(() => {
       // Still show the notification if the title cannot be loaded.
     }
 
+
     toast.custom(
-      (t) => (
-        <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+  (t) => (
+   
+        <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-700 dark:bg-slate-900 relative">
+          <button
+  type="button"
+  onClick={(e) => {
+    e.stopPropagation();
+    toast.dismiss(t.id);
+  }}
+  aria-label="Dismiss notification"
+  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full absolute right-2 text-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-white/10 dark:hover:text-white"
+>
+  ×
+</button>
           <div className="flex items-start gap-3">
             <div className="text-xl">📩</div>
 
@@ -139,21 +152,19 @@ useEffect(() => {
               >
                 View responses →
               </button>
-            </div>
+            
 
-            <button
-              type="button"
-              onClick={() =>toast.dismiss(t.id)}
-              aria-label="Dismiss notification"
-              className="text-slate-400 hover:text-slate-700 dark:hover:text-white"
-            >
-              ×
-            </button>
+         
+
+
           </div>
         </div>
-      ),
-      { duration: 5000 }
-    );
+    </div>
+  ),
+  { duration: 5000,
+     position: "bottom-right",
+   }
+);
   };
 
   socket.on("response:new", handleNewResponse);

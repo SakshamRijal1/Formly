@@ -8,6 +8,12 @@ import {
   LoaderCircle,
   Send,
   Sparkles,
+  Star,
+  Heart,
+  ThumbsUp,
+  Upload,
+  Image as ImageIcon,
+  X,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -29,6 +35,49 @@ export default function PublicForm() {
   const [sendCopy, setSendCopy] = useState(false);
   const [alreadyResponded, setAlreadyResponded] = useState(false);
 
+  // Added: track uploads separately for each question.
+  const [uploading, setUploading] = useState({});
+
+  // Warn users before refreshing or closing the page.
+  useEffect(() => {
+    const hasUnsavedData = () => {
+      const hasAnswers = Object.values(answers).some((answer) => {
+        if (Array.isArray(answer)) return answer.length > 0;
+
+        if (answer && typeof answer === "object") {
+          return (
+            Boolean(answer.assetIds?.length) ||
+            Boolean(answer.files?.length)
+          );
+        }
+
+        return String(answer ?? "").trim() !== "";
+      });
+
+      return (
+        hasAnswers ||
+        Boolean(email.trim()) ||
+        sendCopy
+      );
+    };
+
+    const handleBeforeUnload = (event) => {
+      if (!hasUnsavedData() || submitted) return;
+
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener(
+        "beforeunload",
+        handleBeforeUnload
+      );
+    };
+  }, [answers, email, sendCopy, submitted]);
+
   useEffect(() => {
     setEmail(user?.email ?? "");
   }, [user?.email]);
@@ -42,6 +91,7 @@ export default function PublicForm() {
     setSubmitted(false);
     setSendCopy(false);
     setAlreadyResponded(false);
+    setUploading({});
 
     api
       .get(`/forms/public/${id}`)
@@ -106,6 +156,158 @@ export default function PublicForm() {
     }));
   };
 
+  // Added: upload selected files through the existing backend route.
+  const uploadQuestionFiles = async (question, fileList) => {
+    const selectedFiles = Array.from(fileList ?? []);
+
+    if (!selectedFiles.length) return;
+
+    const questionId = question._id;
+    const settings = question.fileUploadSettings ?? {};
+
+    const maxFiles = Math.max(
+      1,
+      Math.min(10, Number(settings.maxFiles) || 1)
+    );
+
+    const maxSizeMB = Math.max(
+      1,
+      Math.min(20, Number(settings.maxSizeMB) || 10)
+    );
+
+    const isImageQuestion = question.type === "image-upload";
+
+    const allowedTypes = isImageQuestion
+      ? ["image/*"]
+      : Array.isArray(settings.allowedTypes) &&
+          settings.allowedTypes.length
+        ? settings.allowedTypes
+        : ["image/*", "application/pdf"];
+
+    const currentAnswer = answers[questionId];
+    const existingFiles = Array.isArray(currentAnswer?.files)
+      ? currentAnswer.files
+      : [];
+
+    if (existingFiles.length + selectedFiles.length > maxFiles) {
+      toast.error(
+        `You can upload a maximum of ${maxFiles} file(s).`
+      );
+      return;
+    }
+
+    const matchesAllowedType = (file, pattern) => {
+      if (pattern === "*/*") return true;
+
+      if (pattern.endsWith("/*")) {
+        return file.type.startsWith(pattern.slice(0, -1));
+      }
+
+      return (
+        file.type === pattern ||
+        file.name.toLowerCase().endsWith(pattern.toLowerCase())
+      );
+    };
+
+    for (const file of selectedFiles) {
+      if (file.size > maxSizeMB * 1024 * 1024) {
+        toast.error(
+          `${file.name} exceeds the ${maxSizeMB} MB file-size limit.`
+        );
+        return;
+      }
+
+      if (
+        !allowedTypes.some((type) => matchesAllowedType(file, type))
+      ) {
+        toast.error(
+          `${file.name} is not an allowed file type.`
+        );
+        return;
+      }
+    }
+
+    setUploading((current) => ({
+      ...current,
+      [questionId]: true,
+    }));
+
+    try {
+      const body = new FormData();
+
+      selectedFiles.forEach((file) => {
+        body.append("files", file);
+      });
+
+      const { data } = await api.post(
+        `/responses/${id}/upload/${questionId}`,
+        body
+      );
+
+      const uploadedFiles = Array.isArray(data.files)
+        ? data.files
+        : [];
+
+      if (
+        uploadedFiles.length !== selectedFiles.length ||
+        uploadedFiles.some((file) => !file.assetId)
+      ) {
+        throw new Error(
+          "The server did not return all uploaded file IDs."
+        );
+      }
+
+      setAnswers((current) => {
+        const previous = current[questionId];
+        const previousFiles = Array.isArray(previous?.files)
+          ? previous.files
+          : [];
+
+        const allFiles = [...previousFiles, ...uploadedFiles];
+
+        return {
+          ...current,
+          [questionId]: {
+            assetIds: allFiles.map((file) => file.assetId),
+            files: allFiles,
+          },
+        };
+      });
+
+      toast.success(
+        isImageQuestion
+          ? "Image uploaded successfully."
+          : "File uploaded successfully."
+      );
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setUploading((current) => ({
+        ...current,
+        [questionId]: false,
+      }));
+    }
+  };
+
+  // Added: remove an uploaded file from the pending response.
+  // This does not delete the stored file from the server.
+  const removeUploadedFile = (questionId, assetId) => {
+    setAnswers((current) => {
+      const answer = current[questionId];
+      const files = (answer?.files ?? []).filter(
+        (file) => file.assetId !== assetId
+      );
+
+      return {
+        ...current,
+        [questionId]: {
+          assetIds: files.map((file) => file.assetId),
+          files,
+        },
+      };
+    });
+  };
+
   const submit = async (event) => {
     event.preventDefault();
 
@@ -133,17 +335,80 @@ export default function PublicForm() {
       return;
     }
 
+    // Added: prevent submission while any upload is still running.
+    if (Object.values(uploading).some(Boolean)) {
+      toast.error("Please wait for your uploads to finish.");
+      return;
+    }
+
+    // Added: validate required ratings and uploads.
+    for (const question of questions) {
+      const value = answers[question._id];
+
+      if (!question.required) continue;
+
+      if (
+        question.type === "rating" &&
+        !(Number(value) > 0)
+      ) {
+        toast.error(`Please rate: ${question.title}`);
+        return;
+      }
+
+      if (
+        question.type === "file-upload" ||
+        question.type === "image-upload"
+      ) {
+        if (!value?.assetIds?.length) {
+          toast.error(
+            `Please upload a file for: ${question.title}`
+          );
+          return;
+        }
+      }
+    }
+
     setSubmitting(true);
 
     try {
       const payload = {
-        answers: questions.map((question) => ({
-          questionId: question._id,
-          value: answers[question._id] ?? "",
-        })),
+        answers: questions.map((question) => {
+          const value = answers[question._id] ?? "";
+
+          // Include assetIds at the answer level and inside value
+          // to accommodate the existing response controller's
+          // asset-ID handling.
+          if (
+            question.type === "file-upload" ||
+            question.type === "image-upload"
+          ) {
+            const assetIds = value?.assetIds ?? [];
+
+            return {
+              questionId: question._id,
+              assetIds,
+              value: { assetIds },
+            };
+          }
+
+          // Ratings must be submitted as numbers.
+          if (question.type === "rating") {
+            return {
+              questionId: question._id,
+              value: value === "" ? "" : Number(value),
+            };
+          }
+
+          return {
+            questionId: question._id,
+            value,
+          };
+        }),
+
         ...(form.settings?.collectEmail
           ? { respondentEmail: normalizedEmail }
           : {}),
+
         sendCopy,
       };
 
@@ -201,7 +466,8 @@ export default function PublicForm() {
       return (
         <select
           {...common}
-          value={value}
+          value={value} 
+        className="bg-white field text-slate-900 dark:bg-slate-800 dark:text-white"
           onChange={(event) =>
             updateAnswer(question._id, event.target.value)
           }
@@ -275,12 +541,231 @@ export default function PublicForm() {
       );
     }
 
+    // Added: star, heart, or thumbs-up rating question.
+    if (question.type === "rating") {
+      const settings = question.ratingSettings ?? {};
+      const scale = Number(settings.scale) === 10 ? 10 : 5;
+
+      const rating = Number(value) || 0;
+
+      const RatingIcon =
+        settings.icon === "heart"
+          ? Heart
+          : settings.icon === "thumb"
+            ? ThumbsUp
+            : Star;
+
+      return (
+        <div className="space-y-3">
+          <div
+            className="flex flex-wrap items-center gap-2"
+            role="group"
+            aria-label={`Rate ${question.title}`}
+          >
+            {Array.from({ length: scale }, (_, index) => {
+              const score = index + 1;
+              const selected = score <= rating;
+
+              return (
+                <button
+                  key={score}
+                  type="button"
+                  disabled={submitting}
+                  aria-label={`${score} out of ${scale}`}
+                  aria-pressed={rating === score}
+                  onClick={() => updateAnswer(question._id, score)}
+                  className={`grid h-11 w-11 place-items-center rounded-xl border transition focus:outline-none focus:ring-2 focus:ring-violet-500 ${
+                    selected
+                      ? "border-violet-500 bg-violet-50 text-violet-600 dark:bg-violet-500/15"
+                      : "border-slate-200 text-slate-400 hover:border-violet-300 hover:text-violet-500 dark:border-white/10"
+                  }`}
+                >
+                  <RatingIcon
+                    size={21}
+                    fill={
+                      selected && settings.icon !== "thumb"
+                        ? "currentColor"
+                        : "none"
+                    }
+                  />
+                </button>
+              );
+            })}
+          </div>
+
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {rating
+              ? `Your rating: ${rating} out of ${scale}`
+              : `Choose a rating from 1 to ${scale}.`}
+          </p>
+        </div>
+      );
+    }
+
+    // Added: actual file and image uploads.
+    if (
+      question.type === "file-upload" ||
+      question.type === "image-upload"
+    ) {
+      const settings = question.fileUploadSettings ?? {};
+
+      const isImageQuestion = question.type === "image-upload";
+
+      const maxFiles = Math.max(
+        1,
+        Math.min(10, Number(settings.maxFiles) || 1)
+      );
+
+      const maxSizeMB = Math.max(
+        1,
+        Math.min(20, Number(settings.maxSizeMB) || 10)
+      );
+
+      const uploadedFiles = Array.isArray(value?.files)
+        ? value.files
+        : [];
+
+      const isUploading = Boolean(uploading[question._id]);
+
+      const accept = isImageQuestion
+        ? "image/*"
+        : Array.isArray(settings.allowedTypes) &&
+            settings.allowedTypes.length
+          ? settings.allowedTypes.join(",")
+          : "image/*,application/pdf";
+
+      const remainingFiles = maxFiles - uploadedFiles.length;
+
+      return (
+        <div className="space-y-4">
+          <label
+            className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center transition ${
+              isUploading || remainingFiles <= 0
+                ? "cursor-not-allowed opacity-60"
+                : "border-slate-300 hover:border-violet-400 hover:bg-violet-50/50 dark:border-white/15 dark:hover:bg-violet-500/5"
+            }`}
+          >
+            {isUploading ? (
+              <LoaderCircle
+                size={30}
+                className="animate-spin text-violet-600"
+              />
+            ) : isImageQuestion ? (
+              <ImageIcon size={30} className="text-violet-600" />
+            ) : (
+              <Upload size={30} className="text-violet-600" />
+            )}
+
+            <span className="mt-3 text-sm font-semibold">
+              {isUploading
+                ? "Uploading..."
+                : isImageQuestion
+                  ? "Choose image(s)"
+                  : "Choose file(s)"}
+            </span>
+
+            <span className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              {isImageQuestion
+                ? "Image files only"
+                : "Select the requested file(s)"}
+              {" · "}
+              Up to {maxSizeMB} MB each
+            </span>
+
+            <input
+              type="file"
+              accept={accept}
+              multiple={maxFiles > 1}
+              disabled={
+                isUploading ||
+                submitting ||
+                remainingFiles <= 0
+              }
+              required={
+                Boolean(question.required) &&
+                uploadedFiles.length === 0
+              }
+              onChange={(event) => {
+                const input = event.target;
+                const files = input.files;
+
+                // Reset so the same file can be selected again.
+                void uploadQuestionFiles(question, files);
+                input.value = "";
+              }}
+              className="sr-only"
+            />
+          </label>
+
+          {remainingFiles <= 0 && (
+            <p className="text-xs text-slate-500">
+              Maximum number of files reached.
+            </p>
+          )}
+
+          {uploadedFiles.length > 0 && (
+            <div className="space-y-2">
+              {uploadedFiles.map((file) => (
+                <div
+                  key={file.assetId}
+                  className="flex items-center gap-3 rounded-xl border border-slate-200 p-3 dark:border-white/10"
+                >
+                  {isImageQuestion ? (
+                    <ImageIcon
+                      size={20}
+                      className="shrink-0 text-violet-600"
+                    />
+                  ) : (
+                    <FileText
+                      size={20}
+                      className="shrink-0 text-violet-600"
+                    />
+                  )}
+
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words text-sm font-medium">
+                      {file.name}
+                    </p>
+
+                    {Number.isFinite(Number(file.size)) && (
+                      <p className="text-xs text-slate-500">
+                        {(Number(file.size) / (1024 * 1024)).toFixed(2)} MB
+                      </p>
+                    )}
+                  </div>
+
+                  <CheckCircle2
+                    size={18}
+                    className="shrink-0 text-emerald-500"
+                  />
+
+                  <button
+                    type="button"
+                    disabled={submitting || isUploading}
+                    onClick={() =>
+                      removeUploadedFile(
+                        question._id,
+                        file.assetId
+                      )
+                    }
+                    aria-label={`Remove ${file.name}`}
+                    className="rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-500 disabled:opacity-50 dark:hover:bg-red-500/10"
+                  >
+                    <X size={17} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
     const typeMap = {
       date: "date",
       time: "time",
       number: "number",
       "short-answer": "text",
-      "file-upload": "text",
     };
 
     return (
@@ -291,12 +776,7 @@ export default function PublicForm() {
         onChange={(event) =>
           updateAnswer(question._id, event.target.value)
         }
-        placeholder={
-          question.type === "file-upload"
-            ? "File upload is not enabled yet"
-            : "Your answer"
-        }
-        disabled={question.type === "file-upload"}
+        placeholder="Your answer"
         maxLength={10000}
       />
     );
@@ -565,15 +1045,23 @@ export default function PublicForm() {
 
             <button
               type="submit"
-              disabled={submitting}
+              disabled={
+                submitting ||
+                Object.values(uploading).some(Boolean)
+              }
               className="btn-primary"
             >
-              {submitting ? (
+              {submitting ||
+              Object.values(uploading).some(Boolean) ? (
                 <LoaderCircle size={17} className="animate-spin" />
               ) : (
                 <Send size={17} />
               )}
-              {submitting ? "Submitting..." : "Submit response"}
+              {Object.values(uploading).some(Boolean)
+                ? "Uploading..."
+                : submitting
+                  ? "Submitting..."
+                  : "Submit response"}
             </button>
           </div>
         </form>

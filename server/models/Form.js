@@ -1,3 +1,4 @@
+
 import mongoose from "mongoose";
 
 const questionSchema = new mongoose.Schema(
@@ -24,6 +25,8 @@ const questionSchema = new mongoose.Schema(
         "time",
         "number",
         "file-upload",
+        "image-upload",
+        "rating",
       ],
       default: "short-answer",
     },
@@ -39,6 +42,22 @@ const questionSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+
+    // Added: preserve the builder's rating configuration.
+    ratingSettings: {
+      type: mongoose.Schema.Types.Mixed,
+      default: () => ({ scale: 5, icon: "star" }),
+    },
+
+    // Added: preserve upload configuration.
+    fileUploadSettings: {
+      type: mongoose.Schema.Types.Mixed,
+      default: () => ({
+        maxFiles: 1,
+        maxSizeMB: 10,
+        allowedTypes: ["image/*", "application/pdf"],
+      }),
+    },
   },
   { _id: true }
 );
@@ -51,7 +70,6 @@ const formSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-  
     title: {
       type: String,
       required: true,
@@ -72,26 +90,26 @@ const formSchema = new mongoose.Schema(
       color: { type: String, default: "#673ab7" },
       backgroundColor: { type: String, default: "#f0ebf8" },
     },
-settings: {
-  collectEmail: {
-    type: Boolean,
-    default: false,
-  },
-  shuffleQuestions: {
-    type: Boolean,
-    default: false,
-  },
-  limitOneResponse: {
-    type: Boolean,
-    default: false,
-  },
-    confirmationMessage: {
-    type: String,
-    trim: true,
-    maxlength: 1000,
-    default: "Your response has been recorded.",
-  },
-},
+    settings: {
+      collectEmail: {
+        type: Boolean,
+        default: false,
+      },
+      shuffleQuestions: {
+        type: Boolean,
+        default: false,
+      },
+      limitOneResponse: {
+        type: Boolean,
+        default: false,
+      },
+      confirmationMessage: {
+        type: String,
+        trim: true,
+        maxlength: 1000,
+        default: "Your response has been recorded.",
+      },
+    },
     isPublished: {
       type: Boolean,
       default: false,
