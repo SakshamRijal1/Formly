@@ -3,10 +3,7 @@ import axios from "axios";
 
 export const api = axios.create({
   baseURL:
-    import.meta.env.VITE_API_URL ||
-    (import.meta.env.DEV
-      ? "http://localhost:3000/api"
-      : "https://server-ten-lake-ctuswutyzy.vercel.app/api"),
+    import.meta.env.VITE_API_URL,
   withCredentials: true,
   headers: {
     "X-Requested-With": "formly",

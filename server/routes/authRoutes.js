@@ -24,7 +24,7 @@ import {
 const router = express.Router();
 
 const clientURL = () =>
-  (process.env.CLIENT_URL || "http://localhost:5173").replace(/\/+$/, "");
+  (process.env.CLIENT_URL).replace(/\/+$/, "");
 
 // Email/password authentication
 router.post("/register", register);

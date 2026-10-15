@@ -22,7 +22,7 @@ app.disable("x-powered-by");
 
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: process.env.CLIENT_URL,
     credentials: true,
   })
 );
@@ -68,7 +68,7 @@ const startServer = async () => {
     });
 
     httpServer.listen(PORT, () => {
-      console.log(`Formly API running at http://localhost:${PORT}`);
+    
       console.log("Socket.IO initialized.");
     });
   } catch (error) {
