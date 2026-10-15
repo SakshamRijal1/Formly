@@ -66,10 +66,14 @@ const userSchema = new mongoose.Schema(
     },
 
     // Profile
-    profileImage: {
-      type: String,
-      default: "",
-    },
+  profileImage: {
+  type: String,
+  default: "",
+},
+profileImageFileId: {
+  type: String,
+  default: "",
+},  
   },
   {
     timestamps: true,

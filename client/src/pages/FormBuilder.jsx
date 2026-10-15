@@ -180,9 +180,7 @@ export default function FormBuilder() {
           <Link to={`/builder/${id}/responses`} className="btn-secondary !px-3">
             <Settings2 size={16} /> Responses
           </Link>
-          <button onClick={() => navigate(`/forms/${id}`)} className="btn-secondary !px-3">
-            <Eye size={16} /> Preview
-          </button>
+        
           {form.isPublished && (
             <button onClick={copyLink} className="btn-secondary !px-3">
               <Copy size={16} />
