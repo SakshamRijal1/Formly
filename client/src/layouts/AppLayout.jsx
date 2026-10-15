@@ -249,7 +249,7 @@ useEffect(() => {
 
         <div className="mt-3 flex items-center gap-3 border-t border-slate-200 pt-4 dark:border-white/10">
           <div className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-violet-100 font-bold text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">
-            {user?.profileImage ? (
+            {(user?.profileImage && user.profileImage=="") ? (
               <img
                 src={user.profileImage}
                 alt=""

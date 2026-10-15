@@ -2,6 +2,9 @@
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
 import imagekit from "../config/imagekit.js";
+import Form from "../models/Form.js";
+import mongoose from "mongoose";
+import Response from "../models/Response.js";
 
 const ALLOWED_IMAGE_TYPES = new Set([
   "image/jpeg",
@@ -173,5 +176,86 @@ export const changePassword = async (req, res, next) => {
     });
   } catch (error) {
     return next(error);
+  }
+};
+
+
+export const deleteAccount = async (req, res, next) => {
+  const session = await mongoose.startSession();
+
+  try {
+    const userId = req.user.id;
+    const { password, confirmText } = req.body;
+
+    if (confirmText !== "DELETE") {
+      return res.status(400).json({
+        message: 'Type "DELETE" to confirm account deletion.',
+      });
+    }
+
+    const user = await User.findById(userId).select("+password");
+
+    if (!user) {
+      res.clearCookie("formly_token");
+      return res.status(404).json({
+        message: "Account not found.",
+      });
+    }
+
+    // Require the current password for password-based accounts.
+    if (user.password) {
+      if (!password) {
+        return res.status(400).json({
+          message: "Enter your current password to delete your account.",
+        });
+      }
+
+      const passwordMatches = await bcrypt.compare(
+        password,
+        user.password
+      );
+
+      if (!passwordMatches) {
+        return res.status(401).json({
+          message: "Incorrect password.",
+        });
+      }
+    }
+    
+
+    await session.withTransaction(async () => {
+      const forms = await Form.find({ owner: user._id })
+        .select("_id")
+        .session(session);
+
+      const formIds = forms.map((form) => form._id);
+
+      if (formIds.length > 0) {
+        await Response.deleteMany({
+          form: { $in: formIds },
+        }).session(session);
+
+        await Form.deleteMany({
+          owner: user._id,
+        }).session(session);
+      }
+
+      await User.deleteOne({ _id: user._id }).session(session);
+    });
+
+    res.clearCookie("formly_token", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+    });
+
+    return res.status(200).json({
+      message: "Your account has been permanently deleted.",
+    });
+  } catch (error) {
+    return next(error);
+  } finally {
+    await session.endSession();
   }
 };

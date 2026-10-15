@@ -8,6 +8,7 @@ import {
   X,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import DeleteAccountSection from "../components/DeleteAccountSection";
 
 import { useAuth } from "../context/AuthContext";
 import { api, getErrorMessage } from "../services/api";
@@ -356,8 +357,8 @@ export default function Settings() {
           </button>
         </form>
       </section>
-
-      {/* Change password */}
+{ user.authProvider!=="google" &&
+   
       <section className="surface p-6 sm:p-8">
         <div className="mb-6 flex items-center gap-3">
           <LockKeyhole className="text-violet-600" size={21} />
@@ -411,6 +412,7 @@ export default function Settings() {
           </button>
         </form>
       </section>
+      }
 
       {/* Appearance */}
       <section className="surface flex flex-wrap items-center justify-between gap-4 p-6">
@@ -422,6 +424,9 @@ export default function Settings() {
         </div>
         <ThemeToggle />
       </section>
+      <DeleteAccountSection
+  authProvider={user?.authProvider || "local"}
+/>
     </div>
   );
 }

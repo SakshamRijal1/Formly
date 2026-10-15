@@ -18,6 +18,10 @@ import { useAuth } from "../context/AuthContext";
 import { api, getErrorMessage } from "../services/api";
 import ThemeToggle from "../components/ThemeToggle";
 
+// --------------------------------------------------
+// AUTH LAYOUT
+// --------------------------------------------------
+
 function AuthShell({ title, subtitle, children }) {
   return (
     <div className="grid min-h-screen bg-white dark:bg-[#0b0b10] lg:grid-cols-2">
@@ -36,14 +40,16 @@ function AuthShell({ title, subtitle, children }) {
           <p className="mb-5 text-sm font-semibold text-violet-300">
             YOUR IDEAS, BEAUTIFULLY ORGANIZED
           </p>
+
           <h2 className="text-4xl font-extrabold leading-tight xl:text-5xl">
             Better questions.
             <br />
             <span className="text-violet-300">Better answers.</span>
           </h2>
+
           <p className="mt-5 max-w-md text-sm leading-7 text-slate-300">
-            Create thoughtful forms, gather useful feedback, and turn responses
-            into insights — all in one calm workspace.
+            Create thoughtful forms, gather useful feedback, and turn
+            responses into insights — all in one calm workspace.
           </p>
 
           <div className="mt-9 grid grid-cols-2 gap-3">
@@ -70,10 +76,14 @@ function AuthShell({ title, subtitle, children }) {
 
       <section className="flex min-h-screen flex-col p-5 sm:p-10">
         <div className="flex items-center justify-between lg:justify-end">
-          <Link to="/login" className="flex items-center gap-2 font-extrabold lg:hidden">
+          <Link
+            to="/login"
+            className="flex items-center gap-2 font-extrabold lg:hidden"
+          >
             <Sparkles className="text-violet-600" size={22} />
             Formly
           </Link>
+
           <ThemeToggle />
         </div>
 
@@ -81,12 +91,15 @@ function AuthShell({ title, subtitle, children }) {
           <p className="mb-3 text-sm font-bold text-violet-600">
             WELCOME TO FORMLY
           </p>
+
           <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
             {title}
           </h1>
+
           <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">
             {subtitle}
           </p>
+
           <div className="mt-8">{children}</div>
         </div>
 
@@ -98,12 +111,11 @@ function AuthShell({ title, subtitle, children }) {
   );
 }
 
-function Field({
-  label,
-  icon: Icon,
-  type = "text",
-  ...props
-}) {
+// --------------------------------------------------
+// REUSABLE INPUT FIELD
+// --------------------------------------------------
+
+function Field({ label, icon: Icon, type = "text", ...props }) {
   const [showPassword, setShowPassword] = useState(false);
   const isPassword = type === "password";
 
@@ -144,12 +156,70 @@ function Field({
   );
 }
 
+// --------------------------------------------------
+// GOOGLE AUTHENTICATION BUTTON
+// --------------------------------------------------
+
+function GoogleButton({ disabled = false }) {
+  const continueWithGoogle = () => {
+    const baseURL = api.defaults.baseURL?.replace(/\/+$/, "");
+
+    if (!baseURL) {
+      toast.error("The API URL is not configured.");
+      return;
+    }
+
+    // Redirect to the Google OAuth endpoint on your backend.
+    window.location.assign(`${baseURL}/auth/google`);
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={continueWithGoogle}
+      disabled={disabled}
+      className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+    >
+      <svg
+        viewBox="0 0 48 48"
+        aria-hidden="true"
+        className="h-5 w-5 shrink-0"
+      >
+        <path
+          fill="#EA4335"
+          d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5Z"
+          transform="translate(0 4)"
+        />
+        <path
+          fill="#4285F4"
+          d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.76 7.18l7.73 6C44.42 38.03 46.98 31.95 46.98 24.55Z"
+        />
+        <path
+          fill="#FBBC05"
+          d="M10.53 28.59A14.4 14.4 0 0 1 9.75 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.87.93 7.52 2.56 10.78l7.97-6.19Z"
+          transform="translate(0 4)"
+        />
+        <path
+          fill="#34A853"
+          d="M24 48c6.48 0 11.93-2.13 15.91-5.8l-7.73-6c-2.14 1.44-4.89 2.3-8.18 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48Z"
+        />
+      </svg>
+
+      Continue with Google
+    </button>
+  );
+}
+
+// --------------------------------------------------
+// SUBMIT BUTTON
+// --------------------------------------------------
+
 function SubmitButton({ loading, children }) {
   return (
     <button
       type="submit"
       disabled={loading}
-      className="btn-primary mt-2 w-full py-3.5"
+      className="btn-primary mt-2 flex w-full items-center justify-center gap-2 py-3.5 disabled:cursor-not-allowed disabled:opacity-60"
     >
       {loading ? "Please wait..." : children}
       {!loading && <ArrowRight size={17} />}
@@ -157,37 +227,46 @@ function SubmitButton({ loading, children }) {
   );
 }
 
+// --------------------------------------------------
 // LOGIN
+// --------------------------------------------------
+
 export function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const [loading, setLoading] = useState(false);
+
   const [form, setForm] = useState({
     email: "",
     password: "",
   });
 
-  const update = (e) => {
+  const update = (event) => {
     setForm((current) => ({
       ...current,
-      [e.target.name]: e.target.value,
+      [event.target.name]: event.target.value,
     }));
   };
 
-  const submit = async (e) => {
-    e.preventDefault();
+  const submit = async (event) => {
+    event.preventDefault();
     setLoading(true);
 
     try {
       await login(form);
 
       const next = searchParams.get("next");
-      navigate(next?.startsWith("/") ? next : "/", { replace: true });
+
+      navigate(next?.startsWith("/") ? next : "/", {
+        replace: true,
+      });
     } catch (error) {
       if (error.response?.data?.code === "EMAIL_NOT_VERIFIED") {
-        navigate(`/verify-email?email=${encodeURIComponent(form.email)}`);
+        navigate(
+          `/verify-email?email=${encodeURIComponent(form.email)}`
+        );
       } else {
         toast.error(getErrorMessage(error));
       }
@@ -201,6 +280,16 @@ export function Login() {
       title="Welcome back"
       subtitle="Sign in to pick up where you left off."
     >
+      <GoogleButton />
+
+      <div className="my-6 flex items-center gap-4">
+        <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+        <span className="text-xs font-medium text-slate-400">
+          OR CONTINUE WITH EMAIL
+        </span>
+        <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+      </div>
+
       <form onSubmit={submit} className="space-y-5">
         <Field
           label="Email address"
@@ -217,6 +306,7 @@ export function Login() {
         <div>
           <div className="mb-2 flex items-center justify-between">
             <span className="text-sm font-semibold">Password</span>
+
             <Link
               to="/forgot-password"
               className="text-xs font-semibold text-violet-600 hover:text-violet-700"
@@ -250,12 +340,16 @@ export function Login() {
   );
 }
 
+// --------------------------------------------------
 // REGISTER
+// --------------------------------------------------
+
 export function Register() {
   const { register } = useAuth();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(false);
+
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -263,15 +357,15 @@ export function Register() {
     confirmPassword: "",
   });
 
-  const update = (e) => {
+  const update = (event) => {
     setForm((current) => ({
       ...current,
-      [e.target.name]: e.target.value,
+      [event.target.name]: event.target.value,
     }));
   };
 
-  const submit = async (e) => {
-    e.preventDefault();
+  const submit = async (event) => {
+    event.preventDefault();
 
     if (form.password !== form.confirmPassword) {
       toast.error("Passwords do not match.");
@@ -282,7 +376,10 @@ export function Register() {
 
     try {
       await register(form);
-      navigate(`/verify-email?email=${encodeURIComponent(form.email)}`);
+
+      navigate(
+        `/verify-email?email=${encodeURIComponent(form.email)}`
+      );
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -295,6 +392,16 @@ export function Register() {
       title="Create your account"
       subtitle="Enter your details to create your Formly workspace."
     >
+      <GoogleButton />
+
+      <div className="my-6 flex items-center gap-4">
+        <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+        <span className="text-xs font-medium text-slate-400">
+          OR REGISTER WITH EMAIL
+        </span>
+        <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+      </div>
+
       <form onSubmit={submit} className="space-y-4">
         <Field
           label="Full name"
@@ -359,19 +466,24 @@ export function Register() {
   );
 }
 
+// --------------------------------------------------
 // VERIFY EMAIL
+// --------------------------------------------------
+
 export function VerifyEmail() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { verifyEmail } = useAuth();
 
-  const [email, setEmail] = useState(searchParams.get("email") || "");
+  const [email, setEmail] = useState(
+    searchParams.get("email") || ""
+  );
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
 
-  const submit = async (e) => {
-    e.preventDefault();
+  const submit = async (event) => {
+    event.preventDefault();
     setLoading(true);
 
     try {
@@ -388,8 +500,13 @@ export function VerifyEmail() {
     setResending(true);
 
     try {
-      const { data } = await api.post("/auth/resend-otp", { email });
-      toast.success(data.message || "A new verification code was requested.");
+      const { data } = await api.post("/auth/resend-otp", {
+        email,
+      });
+
+      toast.success(
+        data.message || "A new verification code was requested."
+      );
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -409,7 +526,7 @@ export function VerifyEmail() {
           icon={Mail}
           autoComplete="email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(event) => setEmail(event.target.value)}
           required
         />
 
@@ -420,7 +537,9 @@ export function VerifyEmail() {
           placeholder="000000"
           maxLength={6}
           value={otp}
-          onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+          onChange={(event) =>
+            setOtp(event.target.value.replace(/\D/g, ""))
+          }
           required
         />
 
@@ -440,24 +559,34 @@ export function VerifyEmail() {
         to="/login"
         className="mt-5 flex items-center justify-center gap-2 text-sm text-slate-500"
       >
-        <ArrowLeft size={15} /> Back to sign in
+        <ArrowLeft size={15} />
+        Back to sign in
       </Link>
     </AuthShell>
   );
 }
 
+// --------------------------------------------------
 // FORGOT PASSWORD
+// --------------------------------------------------
+
 export function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const submit = async (e) => {
-    e.preventDefault();
+  const submit = async (event) => {
+    event.preventDefault();
     setLoading(true);
 
     try {
-      const { data } = await api.post("/auth/forgot-password", { email });
-      toast.success(data.message || "If the account exists, reset instructions will be sent.");
+      const { data } = await api.post("/auth/forgot-password", {
+        email,
+      });
+
+      toast.success(
+        data.message ||
+          "If the account exists, reset instructions will be sent."
+      );
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -478,24 +607,30 @@ export function ForgotPassword() {
           placeholder="you@example.com"
           autoComplete="email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(event) => setEmail(event.target.value)}
           required
         />
 
-        <SubmitButton loading={loading}>Send reset instructions</SubmitButton>
+        <SubmitButton loading={loading}>
+          Send reset instructions
+        </SubmitButton>
       </form>
 
       <Link
         to="/login"
         className="mt-6 flex items-center justify-center gap-2 text-sm text-slate-500"
       >
-        <ArrowLeft size={15} /> Back to sign in
+        <ArrowLeft size={15} />
+        Back to sign in
       </Link>
     </AuthShell>
   );
 }
 
+// --------------------------------------------------
 // RESET PASSWORD
+// --------------------------------------------------
+
 export function ResetPassword() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -509,15 +644,15 @@ export function ResetPassword() {
 
   const [loading, setLoading] = useState(false);
 
-  const update = (e) => {
+  const update = (event) => {
     setForm((current) => ({
       ...current,
-      [e.target.name]: e.target.value,
+      [event.target.name]: event.target.value,
     }));
   };
 
-  const submit = async (e) => {
-    e.preventDefault();
+  const submit = async (event) => {
+    event.preventDefault();
 
     if (form.password !== form.confirmPassword) {
       toast.error("Passwords do not match.");
@@ -528,7 +663,11 @@ export function ResetPassword() {
 
     try {
       const { data } = await api.post("/auth/reset-password", form);
-      toast.success(data.message || "Password reset successfully.");
+
+      toast.success(
+        data.message || "Password reset successfully."
+      );
+
       navigate("/login", { replace: true });
     } catch (error) {
       toast.error(getErrorMessage(error));

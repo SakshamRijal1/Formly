@@ -4,6 +4,7 @@ import { requireAuth } from "../middleware/auth.js";
 import {
   updateProfile,
   changePassword,
+  deleteAccount,
 } from "../controllers/userController.js";
 import upload from "../middleware/upload.js";
 
@@ -14,6 +15,7 @@ router.use(requireAuth);
 router.put("/", upload.single("avatar"), updateProfile);
 router.patch("/profile", updateProfile);
 router.patch("/password", changePassword);
+router.delete("/me", requireAuth, deleteAccount);
 
 
 export default router;

@@ -4,6 +4,7 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { createServer } from "node:http";
+import passport from "./config/passport.js";
 
 import connectDB from "./config/db.js";
 import { initializeSocket } from "./config/socket.js";
@@ -29,6 +30,7 @@ app.use(
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 app.use(cookieParser());
+app.use(passport.initialize());
 
 app.get("/", (req, res) => {
   res.json({ message: "Formly API is running." });
@@ -41,6 +43,7 @@ app.use("/api/users", userRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
+
 const startServer = async () => {
   try {
     if (!process.env.MONGO_URI || !process.env.JWT_SECRET) {
@@ -48,7 +51,6 @@ const startServer = async () => {
     }
 
     await connectDB();
-
     initializeSocket(httpServer);
 
     const PORT = Number(process.env.PORT || 3000);

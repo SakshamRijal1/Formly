@@ -19,6 +19,8 @@
     "multer": "^2.4.0",
     "node": "^26.12.0",
     "nodemailer": "^10.1.1",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
     "socket.io": "^4.8.4",
     "zod": "^4.6.7"
   },
