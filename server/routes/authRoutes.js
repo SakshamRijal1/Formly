@@ -15,7 +15,7 @@ import {
 } from "../controllers/authController.js";
 
 
-import { requireAuth } from "../middleware/auth.js";
+import { optionalAuth, requireAuth } from "../middleware/auth.js";
 import {
   generateToken,
   setAuthCookie,
@@ -32,7 +32,7 @@ router.post("/verify-email", verifyEmail);
 router.post("/resend-otp", resendOTP);
 router.post("/login", login);
 router.post("/logout", logout);
-router.get("/me", requireAuth, getMe);
+router.get("/me", optionalAuth, getMe);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
 
