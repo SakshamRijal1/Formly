@@ -1,44 +1,88 @@
 
-import nodemailer from "nodemailer";
-
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT || 587),
-  secure:
-    process.env.SMTP_SECURE === "true" ||
-    Number(process.env.SMTP_PORT || 587) === 465,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
-
-export const sendEmail = async ({ to, subject, html }) => {
+const getSender = () => {
   const from = process.env.SMTP_FROM;
 
-  // Give a clear error instead of sending an invalid email.
-  if (!process.env.SMTP_HOST) {
-    throw new Error("Email configuration missing: SMTP_HOST");
+  if (!from) {
+    throw new Error(
+      "Email configuration missing: SMTP_FROM"
+    );
   }
 
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    throw new Error("Email configuration missing: SMTP_USER or SMTP_PASS");
+  // Supports: Formly <verified@example.com>
+  const match = from.match(/^(.*?)\s*<([^<>]+)>$/);
+
+  if (match) {
+    return {
+      name: match[1].trim().replace(/^"|"$/g, ""),
+      email: match[2].trim(),
+    };
   }
 
-  if (!from || !from.includes("@")) {
-    throw new Error("Invalid SMTP_FROM. Set it to your verified sender email.");
+  if (!from.includes("@")) {
+    throw new Error(
+      "Invalid SMTP_FROM. Use your verified sender email."
+    );
+  }
+
+  return {
+    email: from.trim(),
+  };
+};
+
+export const sendEmail = async ({ to, subject, html }) => {
+  const apiKey = process.env.BREVO_API_KEY;
+
+  if (!apiKey) {
+    throw new Error(
+      "Email configuration missing: BREVO_API_KEY"
+    );
   }
 
   if (!to || !subject || !html) {
-    throw new Error("Email recipient, subject and HTML content are required.");
+    throw new Error(
+      "Email recipient, subject and HTML content are required."
+    );
   }
 
-  return transporter.sendMail({
-    from,
-    to,
-    subject,
-    html,
-  });
+  const response = await fetch(
+    "https://api.brevo.com/v3/smtp/email",
+    {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "api-key": apiKey,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        sender: getSender(),
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const details = await response.text();
+
+    throw new Error(
+      `Brevo email API failed (${response.status}): ${details}`
+    );
+  }
+
+  return response.json();
+};
+
+// Preserve compatibility with controllers that use
+// transporter.sendMail({ from, to, subject, html }).
+const transporter = {
+  sendMail: async ({ from, to, subject, html }) => {
+    return sendEmail({
+      to,
+      subject,
+      html,
+    });
+  },
 };
 
 export default transporter;
