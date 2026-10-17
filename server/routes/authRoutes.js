@@ -32,7 +32,7 @@ router.post("/verify-email", verifyEmail);
 router.post("/resend-otp", resendOTP);
 router.post("/login", login);
 router.post("/logout", logout);
-router.get("/me", optionalAuth, getMe);
+router.get("/me", getMe);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
 

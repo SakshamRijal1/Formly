@@ -32,6 +32,7 @@ export const requireAuth = async (req, res, next) => {
 
 // Allows public requests, but identifies logged-in users.
 export const optionalAuth = async (req, res, next) => {
+  console.log(req)
   try {
     const token = req.cookies?.formly_token;
 
