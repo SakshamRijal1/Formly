@@ -290,9 +290,13 @@ export const getMe = (req, res) => {
 };
 
 // FORGOT PASSWORD
+
 export const forgotPassword = async (req, res, next) => {
   try {
-    const { email } = req.body;
+    const email =
+      typeof req.body?.email === "string"
+        ? req.body.email.trim().toLowerCase()
+        : "";
 
     if (!email) {
       return res.status(400).json({
@@ -300,124 +304,165 @@ export const forgotPassword = async (req, res, next) => {
       });
     }
 
-    const user = await User.findOne({
-      email: email.trim().toLowerCase(),
-    }).select("+password");
+    // Avoid revealing whether an account exists.
+    const user = await User.findOne({ email }).select(
+      "+resetPasswordToken +resetPasswordExpiresAt +password"
+    );
 
-    // Keep the response the same whether the account exists or not.
     if (!user || !user.password) {
       return res.json({
-        message: "If an eligible account exists, reset instructions will be sent.",
+        message:
+          "If an eligible account exists, reset instructions will be sent.",
       });
     }
 
+    // Generate a cryptographically secure, single-use token.
     const rawToken = crypto.randomBytes(32).toString("hex");
 
-    user.resetPasswordToken = crypto
+    const hashedToken = crypto
       .createHash("sha256")
       .update(rawToken)
       .digest("hex");
 
+    const clientURL = process.env.CLIENT_URL?.replace(/\/+$/, "");
+
+    if (!clientURL || !/^https:\/\//i.test(clientURL)) {
+      throw new Error(
+        "CLIENT_URL must be configured as an HTTPS URL."
+      );
+    }
+
+    // Save only the hash of the reset token.
+    user.resetPasswordToken = hashedToken;
     user.resetPasswordExpiresAt = new Date(
       Date.now() + 15 * 60 * 1000
     );
 
     await user.save();
 
-    const clientURL = (process.env.CLIENT_URL || "").replace(/\/+$/, "");
-
-    if (!clientURL) {
-      throw new Error("CLIENT_URL is not configured on the server.");
-    }
-
-    const resetUrl =
-      `${clientURL}/reset-password?token=${rawToken}` +
-      `&email=${encodeURIComponent(user.email)}`;
+    const resetUrl = new URL("/reset-password", clientURL);
+    resetUrl.searchParams.set("token", rawToken);
+    resetUrl.searchParams.set("email", user.email);
 
     try {
       await sendEmail({
         to: user.email,
         subject: "Reset your Formly password",
         html: `
-          <p>Use the link below to reset your password. It expires in 15 minutes.</p>
-          <a href="${resetUrl}">Reset password</a>
+          <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto">
+            <h2>Reset your Formly password</h2>
+            <p>We received a request to reset your password.</p>
+            <p>This link expires in 15 minutes and can be used only once.</p>
+            <p>
+              <a href="${resetUrl.toString()}"
+                 style="display:inline-block;padding:12px 20px;
+                 background:#2563eb;color:#fff;text-decoration:none;
+                 border-radius:6px">
+                Reset password
+              </a>
+            </p>
+            <p>If you did not request this, you can ignore this email.</p>
+          </div>
         `,
+        text: `Reset your Formly password using this link: ${resetUrl.toString()}. This link expires in 15 minutes.`,
       });
     } catch (emailError) {
+      // Invalidate the token if the email could not be sent.
       user.resetPasswordToken = undefined;
       user.resetPasswordExpiresAt = undefined;
-
       await user.save();
 
+      // Let Express's error handler report the delivery failure.
       throw emailError;
     }
 
     return res.json({
-      message: "If an eligible account exists, reset instructions will be sent.",
+      message:
+        "If an eligible account exists, reset instructions will be sent.",
     });
   } catch (error) {
     return next(error);
   }
 };
 
+
 // RESET PASSWORD
+
 export const resetPassword = async (req, res, next) => {
   try {
     const { email, token, password, confirmPassword } = req.body;
 
-    if (!email || !token || !password) {
+    // 1. Validate required fields.
+    if (
+      typeof email !== "string" ||
+      typeof token !== "string" ||
+      typeof password !== "string" ||
+      !email.trim() ||
+      !token.trim()
+    ) {
       return res.status(400).json({
         message: "Email, reset token and new password are required.",
       });
     }
 
+    // 2. Validate password length.
     if (password.length < 8 || password.length > 128) {
       return res.status(400).json({
         message: "Password must be between 8 and 128 characters.",
       });
     }
 
+    // 3. Require at least one letter and one number.
     if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
       return res.status(400).json({
-        message: "Password must contain at least one letter and one number.",
+        message:
+          "Password must contain at least one letter and one number.",
       });
     }
 
+    // 4. Check confirmation.
     if (password !== confirmPassword) {
       return res.status(400).json({
         message: "Passwords do not match.",
       });
     }
 
+    // 5. Hash the submitted token before comparing with the database.
     const hashedToken = crypto
       .createHash("sha256")
       .update(token)
       .digest("hex");
 
+    // 6. Find a matching, unexpired reset token.
     const user = await User.findOne({
       email: email.trim().toLowerCase(),
       resetPasswordToken: hashedToken,
       resetPasswordExpiresAt: { $gt: new Date() },
-    }).select(
-      "+resetPasswordToken +resetPasswordExpiresAt +password"
-    );
+    }).select("+resetPasswordToken +resetPasswordExpiresAt +password");
 
-    if (!user) {
+    if (!user || !user.password) {
       return res.status(400).json({
         message: "Reset link is invalid or expired.",
       });
     }
 
+    // 7. Hash the new password.
     user.password = await bcrypt.hash(password, 12);
+
+    // 8. Make the reset token single-use.
     user.resetPasswordToken = undefined;
     user.resetPasswordExpiresAt = undefined;
 
     await user.save();
 
-    return res.json({
+    // 9. Do not automatically log in; require normal login.
+    clearAuthCookie(res);
+
+    return res.status(200).json({
       message: "Password reset successfully. Please log in.",
     });
   } catch (error) {
     return next(error);
   }
 };
+

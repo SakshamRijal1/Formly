@@ -3,90 +3,120 @@ import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import User from "../models/User.js";
 
+const isProduction = process.env.NODE_ENV === "production";
+
+const clientID = process.env.GOOGLE_CLIENT_ID;
+const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
 const callbackURL =
   process.env.GOOGLE_CALLBACK_URL ||
-  "http://localhost:3000/api/auth/google/callback";
-  console.log(process.env.GOOGLE_CLIENT_ID)
-  console.log(process.env.GOOGLE_CLIENT_SECRET)
-  console.log(process.env.GOOGLE_CALLBACK_URL)
+  (!isProduction
+    ? "http://localhost:4000/api/auth/google/callback"
+    : undefined);
 
-if (
-  !process.env.GOOGLE_CLIENT_ID ||
-  !process.env.GOOGLE_CLIENT_SECRET
-) {
+if (!clientID || !clientSecret || !callbackURL) {
   console.warn(
-    "Google OAuth is not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env."
+    "Google OAuth is not configured. Check GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_CALLBACK_URL."
   );
 } else {
   passport.use(
+    "google",
     new GoogleStrategy(
       {
-        clientID: process.env.GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        clientID,
+        clientSecret,
         callbackURL,
+        passReqToCallback: false,
       },
       async (_accessToken, _refreshToken, profile, done) => {
         try {
+          // Accept only an email Google explicitly confirms as verified.
           const email = profile.emails?.[0]?.value
             ?.trim()
             .toLowerCase();
 
-          if (!email || profile.emails?.[0]?.verified === false) {
+          const verified =
+            profile._json?.email_verified ??
+            profile.emails?.[0]?.verified;
+
+          if (!email || verified !== true) {
             return done(
-              new Error("Google did not provide a verified email address.")
+              null,
+              false,
+              {
+                message:
+                  "Google must provide a verified email address.",
+              }
             );
           }
 
+          // First, look for an account already linked to this Google ID.
           let user = await User.findOne({
-            $or: [
-              { googleId: profile.id },
-              { email },
-            ],
+            googleId: profile.id,
           });
 
           if (user) {
-            // Never silently link a local password account to Google.
-            // The user must prove ownership through the existing login flow.
-            if (!user.googleId && user.authProvider !== "google") {
+            // Prevent a Google identity from silently switching emails.
+            if (user.email?.toLowerCase() !== email) {
               return done(
                 null,
                 false,
                 {
                   message:
-                    "An account already exists with this email. Log in with your existing method first.",
+                    "The Google account email does not match the linked account.",
                 }
               );
             }
 
-            if (!user.googleId) {
-              user.googleId = profile.id;
-            }
-
-            user.isEmailVerified = true;
-
+            // Update only profile fields; never overwrite passwords or roles.
             if (!user.profileImage && profile.photos?.[0]?.value) {
               user.profileImage = profile.photos[0].value;
             }
 
+            if (!user.isEmailVerified) {
+              user.isEmailVerified = true;
+            }
+
             await user.save();
-          } else {
-            user = await User.create({
-              name: profile.displayName || email.split("@")[0],
-              email,
-              googleId: profile.id,
-              authProvider: "google",
-              isEmailVerified: true,
-              profileImage: profile.photos?.[0]?.value || "",
-            });
+
+            return done(null, user);
           }
 
-          return done(null, user);
-        } catch (error) {
-          if (error.code === 11000) {
+          // Do not silently link Google to an existing local account.
+          const existingUser = await User.findOne({ email });
+
+          if (existingUser) {
             return done(
               null,
               false,
-              { message: "An account with this email already exists." }
+              {
+                message:
+                  "An account already exists with this email. Sign in using your existing method first.",
+              }
+            );
+          }
+
+          // Create a new Google account.
+          user = await User.create({
+            name: profile.displayName || email.split("@")[0],
+            email,
+            googleId: profile.id,
+            authProvider: "google",
+            isEmailVerified: true,
+            profileImage: profile.photos?.[0]?.value || "",
+          });
+
+          return done(null, user);
+        } catch (error) {
+          // Handle duplicate email/Google ID caused by concurrent requests.
+          if (error?.code === 11000) {
+            return done(
+              null,
+              false,
+              {
+                message:
+                  "An account with these details already exists. Please try signing in again.",
+              }
             );
           }
 
