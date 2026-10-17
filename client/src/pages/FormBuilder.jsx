@@ -83,7 +83,7 @@ export default function FormBuilder() {
         top: 0,
         left: 0,
         behavior: "instant",
-      })})
+      })},[])
 
   useEffect(() => {
     let active = true;

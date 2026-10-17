@@ -18,19 +18,13 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Check whether the current browser has a valid login session.
+  // Restore the session from the backend cookie.
   const refreshUser = useCallback(async () => {
     try {
       const { data } = await api.get("/auth/me");
       const currentUser = data?.user ?? null;
 
       setUser(currentUser);
-
-      console.log(
-        "Authentication check:",
-        currentUser ? "Logged in" : "No active session"
-      );
-
       return currentUser;
     } catch (error) {
       setUser(null);
@@ -46,21 +40,19 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  // Check the session when the app first loads.
   useEffect(() => {
     refreshUser();
   }, [refreshUser]);
 
   // Connect the socket only for authenticated users.
   useEffect(() => {
-    if (loading) return;
-
-    if (user) {
-      if (!socket.connected) {
-        socket.connect();
-      }
-    } else {
+    if (loading || !user) {
       socket.disconnect();
+      return;
+    }
+
+    if (!socket.connected) {
+      socket.connect();
     }
 
     return () => {
@@ -68,37 +60,40 @@ export function AuthProvider({ children }) {
     };
   }, [user, loading]);
 
-  // Log in.
   const login = async (credentials) => {
     try {
       const { data } = await api.post("/auth/login", credentials);
       const loggedInUser = data?.user ?? null;
 
       if (!loggedInUser) {
-        throw new Error(
-          "Login succeeded without returning user information. Check the backend login response."
-        );
+        await refreshUser();
+
+        if (!user) {
+          throw new Error(
+            "Login response did not contain user information."
+          );
+        }
       }
 
-      setUser(loggedInUser);
-      setLoading(false);
+      const authenticatedUser = loggedInUser;
+      if (authenticatedUser) {
+        setUser(authenticatedUser);
+      }
 
+      setLoading(false);
       toast.success("Welcome back!");
 
-      return loggedInUser;
+      return authenticatedUser;
     } catch (error) {
       toast.error(getErrorMessage(error));
       throw error;
     }
   };
 
-  // Register a new account.
   const register = async (details) => {
     try {
       const { data } = await api.post("/auth/register", details);
-
       toast.success("Check your email for the verification code.");
-
       return data;
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -106,7 +101,6 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Verify email.
   const verifyEmail = async (details) => {
     try {
       const { data } = await api.post("/auth/verify-email", details);
@@ -118,7 +112,6 @@ export function AuthProvider({ children }) {
       }
 
       toast.success("Email verified successfully!");
-
       return verifiedUser;
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -126,7 +119,6 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Log out.
   const logout = async () => {
     try {
       await api.post("/auth/logout");

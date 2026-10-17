@@ -9,7 +9,7 @@ export default function ProtectedRoute() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-[#0b0b10]">
         <LoaderCircle className="h-8 w-8 animate-spin text-violet-600" />
       </div>
     );
@@ -20,7 +20,13 @@ export default function ProtectedRoute() {
       <Navigate
         to="/login"
         replace
-        state={{ from: location }}
+        state={{
+          from: {
+            pathname: location.pathname,
+            search: location.search,
+            hash: location.hash,
+          },
+        }}
       />
     );
   }

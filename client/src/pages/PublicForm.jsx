@@ -44,7 +44,7 @@ export default function PublicForm() {
       top: 0,
       left: 0,
       behavior: "instant",
-    })})
+    })},[])
   useEffect(() => {
     const hasUnsavedData = () => {
       const hasAnswers = Object.values(answers).some((answer) => {

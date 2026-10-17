@@ -127,7 +127,7 @@ export default function Dashboard() {
       top: 0,
       left: 0,
       behavior: "instant",
-    })})
+    })},[])
   const loadForms = useCallback(async () => {
     setLoading(true);
     try {

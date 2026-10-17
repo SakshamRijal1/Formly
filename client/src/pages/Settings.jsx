@@ -43,7 +43,7 @@ export default function Settings() {
       top: 0,
       left: 0,
       behavior: "instant",
-    })})
+    })},[])
 
   // Keep local state synchronized with authentication state.
   

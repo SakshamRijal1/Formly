@@ -160,7 +160,7 @@ export default function Responses() {
         top: 0,
         left: 0,
         behavior: "instant",
-      })})
+      })},[])
 
   useEffect(() => {
     if (!id) return;

@@ -1,16 +1,9 @@
 
-import { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import toast from "react-hot-toast";
-import { socket } from "../services/socket";
-import { api } from "../services/api";
+import { useEffect, useState } from "react";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   BarChart3,
   FilePlus2,
-
   LayoutDashboard,
   LogOut,
   Menu,
@@ -18,12 +11,15 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import toast from "react-hot-toast";
 
+import { useAuth } from "../context/AuthContext";
+import { socket } from "../services/socket";
+import { api } from "../services/api";
 import ThemeToggle from "../components/ThemeToggle";
 
 const navItems = [
   { label: "Overview", to: "/", icon: LayoutDashboard },
- 
 ];
 
 const playNotificationSound = () => {
@@ -57,148 +53,180 @@ const playNotificationSound = () => {
     oscillator.connect(gain);
     gain.connect(context.destination);
 
-    oscillator.start();
-    oscillator.stop(context.currentTime + 0.3);
-
     oscillator.onended = () => {
       context.close().catch(() => {});
     };
+
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.3);
   } catch (error) {
     console.warn("Notification sound could not play.", error);
   }
 };
 
 export default function AppLayout() {
-    const { user,loading, logout } = useAuth();
-
-const navigate = useNavigate();
-
-
-if (loading) {
-  return <div>Checking login...</div>;
-}
-
-if (!user) {
-  return (
-    <div className="flex min-h-screen items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold">Login required</h1>
-        <p className="mt-2 text-slate-500">
-          You need to log in to fill out this form.
-        </p>
-
-        <button
-          onClick={() => navigate("/login")}
-          className="mt-6 rounded-lg bg-violet-600 px-5 py-2.5 text-white"
-        >
-          Log in to continue
-        </button>
-      </div>
-    </div>
-  );
-}
-
-useEffect(() => {
-  const handleNewResponse = async (event) => {
-    playNotificationSound()
-    const formId = event?.formId;
-    if (!formId) return;
-
-    let formTitle = event.formTitle || "Your form";
-
-    try {
-      const { data } = await api.get(`/forms/${formId}`);
-      formTitle = data.form?.title || formTitle;
-    } catch {
-      // Still show the notification if the title cannot be loaded.
-    }
-
-
-    toast.custom(
-  (t) => (
-   
-        <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-700 dark:bg-slate-900 relative">
-          <button
-  type="button"
-  onClick={(e) => {
-    e.stopPropagation();
-    toast.dismiss(t.id);
-  }}
-  aria-label="Dismiss notification"
-  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full absolute right-2 text-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-white/10 dark:hover:text-white"
->
-  ×
-</button>
-          <div className="flex items-start gap-3">
-            <div className="text-xl">📩</div>
-
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold text-slate-900 dark:text-white">
-                New response received!
-              </p>
-
-              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                A new response was submitted to{" "}
-                <strong>{formTitle}</strong>.
-              </p>
-
-              <button
-                type="button"
-                onClick={() => {
-                  toast.dismiss(t);
-                  navigate(`/builder/${formId}/responses`);
-                }}
-                className="mt-3 text-sm font-semibold text-violet-600 hover:underline dark:text-violet-400"
-              >
-                View responses →
-              </button>
-            
-
-         
-
-
-          </div>
-        </div>
-    </div>
-  ),
-  { duration: 5000,
-     position: "bottom-right",
-   }
-);
-  };
-
-  socket.on("response:new", handleNewResponse);
-
-  return () => {
-    socket.off("response:new", handleNewResponse);
-  };
-}, [navigate,playNotificationSound]);
-
+  const { user, loading, logout } = useAuth();
+  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // Close the mobile sidebar when navigating to another route.
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [navigate]);
 
+  // Listen for new responses only when the user is authenticated.
+  useEffect(() => {
+    if (loading || !user) return;
+
+    let active = true;
+
+    const handleNewResponse = async (event) => {
+      if (!event?.formId) return;
+
+      playNotificationSound();
+
+      let formTitle = event.formTitle || "Your form";
+
+      try {
+        const { data } = await api.get(
+          `/forms/${encodeURIComponent(event.formId)}`
+        );
+
+        if (!active) return;
+
+        formTitle = data?.form?.title || formTitle;
+      } catch {
+        // The notification can still be shown without the form title.
+      }
+
+      if (!active) return;
+
+      toast.custom(
+        (t) => (
+          <div className="relative w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+            <button
+              type="button"
+              onClick={() => toast.dismiss(t.id)}
+              aria-label="Dismiss notification"
+              className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full text-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-white/10 dark:hover:text-white"
+            >
+              ×
+            </button>
+
+            <div className="flex items-start gap-3 pr-5">
+              <div className="text-xl" aria-hidden="true">
+                📩
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-slate-900 dark:text-white">
+                  New response received!
+                </p>
+
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                  A new response was submitted to{" "}
+                  <strong>{formTitle}</strong>.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    toast.dismiss(t.id);
+                    navigate(
+                      `/builder/${encodeURIComponent(event.formId)}/responses`
+                    );
+                  }}
+                  className="mt-3 text-sm font-semibold text-violet-600 hover:underline dark:text-violet-400"
+                >
+                  View responses →
+                </button>
+              </div>
+            </div>
+          </div>
+        ),
+        {
+          duration: 5000,
+          position: "bottom-right",
+        }
+      );
+    };
+
+    socket.on("response:new", handleNewResponse);
+
+    return () => {
+      active = false;
+      socket.off("response:new", handleNewResponse);
+    };
+  }, [loading, user, navigate]);
+
+  // All hooks are declared before conditional returns.
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-slate-600 dark:bg-[#0b0b10] dark:text-slate-300">
+        Checking login...
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 dark:bg-[#0b0b10]">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+            Login required
+          </h1>
+
+          <p className="mt-2 text-slate-500 dark:text-slate-400">
+            You need to log in to access your workspace.
+          </p>
+
+          <button
+            type="button"
+            onClick={() => navigate("/login")}
+            className="mt-6 rounded-lg bg-violet-600 px-5 py-2.5 font-semibold text-white transition hover:bg-violet-700"
+          >
+            Log in to continue
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const sidebar = (
     <div className="flex h-full flex-col">
       <button
-        onClick={() => navigate("/")}
+        type="button"
+        onClick={() => {
+          navigate("/");
+          setMobileOpen(false);
+        }}
         className="flex items-center gap-3 px-6 py-6 text-left"
       >
         <span className="grid h-10 w-10 place-items-center rounded-2xl bg-violet-600 text-white shadow-lg shadow-violet-600/20">
           <Sparkles size={21} />
         </span>
+
         <span>
-          <span className="block text-lg font-extrabold tracking-tight">Formly</span>
-          <span className="text-xs text-slate-500">Forms made simple</span>
+          <span className="block text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">
+            Formly
+          </span>
+          <span className="text-xs text-slate-500">
+            Forms made simple
+          </span>
         </span>
       </button>
 
       <div className="px-4 pb-4">
         <button
-          onClick={() => navigate("/new")}
-          className="btn-primary w-full py-3 shadow-lg shadow-violet-600/15"
+          type="button"
+          onClick={() => {
+            navigate("/new");
+            setMobileOpen(false);
+          }}
+          className="btn-primary flex w-full items-center justify-center gap-2 py-3 shadow-lg shadow-violet-600/15"
         >
-          <FilePlus2 size={18} /> Create a form
+          <FilePlus2 size={18} />
+          Create a form
         </button>
       </div>
 
@@ -233,39 +261,56 @@ useEffect(() => {
         <div className="mb-4 rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-50 to-white p-4 dark:border-violet-500/20 dark:from-violet-500/10 dark:to-transparent">
           <div className="mb-2 flex items-center gap-2 text-violet-700 dark:text-violet-300">
             <BarChart3 size={17} />
-            <span className="text-sm font-bold">Make it meaningful</span>
+            <span className="text-sm font-bold">
+              Make it meaningful
+            </span>
           </div>
+
           <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
             Collect feedback, learn from responses, and improve your ideas.
           </p>
         </div>
 
         <button
-          onClick={() => navigate("/settings")}
+          type="button"
+          onClick={() => {
+            navigate("/settings");
+            setMobileOpen(false);
+          }}
           className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-white/[0.05]"
         >
-          <Settings2 size={18} /> Settings
+          <Settings2 size={18} />
+          Settings
         </button>
 
         <div className="mt-3 flex items-center gap-3 border-t border-slate-200 pt-4 dark:border-white/10">
           <div className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-violet-100 font-bold text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">
-            {(user?.profileImage && user.profileImage=="") ? (
+            {user.profileImage ? (
               <img
                 src={user.profileImage}
-                alt=""
+                alt={`${user.name || "User"}'s profile`}
                 className="h-full w-full object-cover"
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                }}
               />
             ) : (
-              user?.name?.charAt(0)?.toUpperCase() || "U"
+              user.name?.charAt(0)?.toUpperCase() || "U"
             )}
           </div>
 
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-bold">{user?.name}</p>
-            <p className="truncate text-xs text-slate-500">{user?.email}</p>
+            <p className="truncate text-sm font-bold text-slate-900 dark:text-white">
+              {user.name || "User"}
+            </p>
+            <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+              {user.email}
+            </p>
           </div>
 
           <button
+            type="button"
             onClick={logout}
             className="icon-btn"
             title="Log out"
@@ -282,26 +327,36 @@ useEffect(() => {
     <div className="min-h-screen bg-slate-50 dark:bg-[#0b0b10]">
       {mobileOpen && (
         <button
+          type="button"
           className="fixed inset-0 z-40 bg-black/50 lg:hidden"
           onClick={() => setMobileOpen(false)}
-          aria-label="Close navigation"
+          aria-label="Close navigation overlay"
         />
       )}
 
+      {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-50 hidden w-[270px] border-r border-slate-200 bg-white dark:border-white/[0.08] dark:bg-[#101016] lg:block">
         {sidebar}
       </aside>
 
+      {/* Mobile sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-[280px] border-r border-slate-200 bg-white transition-transform dark:border-white/[0.08] dark:bg-[#101016] lg:hidden ${
+        aria-label="Mobile navigation"
+        className={`fixed inset-y-0 left-0 z-50 w-[280px] border-r border-slate-200 bg-white transition-transform duration-200 dark:border-white/[0.08] dark:bg-[#101016] lg:hidden ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="absolute right-3 top-4">
-          <button className="icon-btn" onClick={() => setMobileOpen(false)}>
+        <div className="absolute right-3 top-4 z-10">
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => setMobileOpen(false)}
+            aria-label="Close navigation"
+          >
             <X size={20} />
           </button>
         </div>
+
         {sidebar}
       </aside>
 
@@ -309,16 +364,19 @@ useEffect(() => {
         <header className="sticky top-0 z-30 flex h-[72px] items-center justify-between border-b border-slate-200/80 bg-white/85 px-4 backdrop-blur-xl dark:border-white/[0.08] dark:bg-[#0b0b10]/85 sm:px-8">
           <div className="flex items-center gap-3">
             <button
+              type="button"
               className="icon-btn lg:hidden"
               onClick={() => setMobileOpen(true)}
               aria-label="Open navigation"
             >
               <Menu size={21} />
             </button>
+
             <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">
               Your workspace
             </span>
           </div>
+
           <ThemeToggle />
         </header>
 
