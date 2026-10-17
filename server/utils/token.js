@@ -1,3 +1,4 @@
+
 import jwt from "jsonwebtoken";
 
 export const generateToken = (userId) =>
@@ -11,7 +12,8 @@ export const setAuthCookie = (res, token) => {
   res.cookie("formly_token", token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite:
+      process.env.NODE_ENV === "production" ? "none" : "lax",
     path: "/",
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
@@ -21,7 +23,8 @@ export const clearAuthCookie = (res) => {
   res.clearCookie("formly_token", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite:
+      process.env.NODE_ENV === "production" ? "none" : "lax",
     path: "/",
   });
 };
