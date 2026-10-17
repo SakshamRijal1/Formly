@@ -246,8 +246,22 @@ export const logout = (req, res) => {
   res.json({ message: "Logged out successfully." });
 };
 
-export const getMe = (req, res) => {
-  res.json({ user: publicUser(req.user) });
+export const getMe = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(200).json({
+        success: true,
+        user: null,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      user: publicUser(req.user),
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const forgotPassword = async (req, res, next) => {
