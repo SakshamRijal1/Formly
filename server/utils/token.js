@@ -8,23 +8,24 @@ export const generateToken = (userId) =>
     { expiresIn: "7d" }
   );
 
-export const setAuthCookie = (res, token) => {
-  res.cookie("formly_token", token, {
+const cookieOptions = () => {
+  const isProduction = process.env.NODE_ENV === "production";
+
+  return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite:
-      process.env.NODE_ENV === "production" ? "none" : "lax",
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
     path: "/",
     maxAge: 7 * 24 * 60 * 60 * 1000,
-  });
+  };
+};
+
+export const setAuthCookie = (res, token) => {
+  res.cookie("formly_token", token, cookieOptions());
 };
 
 export const clearAuthCookie = (res) => {
-  res.clearCookie("formly_token", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite:
-      process.env.NODE_ENV === "production" ? "none" : "lax",
-    path: "/",
-  });
+  const { maxAge, ...options } = cookieOptions();
+
+  res.clearCookie("formly_token", options);
 };
