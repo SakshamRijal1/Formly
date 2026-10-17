@@ -1,3 +1,4 @@
+
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import User from "../models/User.js";
@@ -9,22 +10,29 @@ import {
   clearAuthCookie,
 } from "../utils/token.js";
 
-const publicUser = (user) => ({
-  id: user._id,
-  name: user.name,
-  email: user.email,
-  profileImage: user.profileImage,
-  isEmailVerified: user.isEmailVerified,
-  authProvider: user.authProvider,
-});
+// Safely format user data for API responses.
+const publicUser = (user) => {
+  if (!user) return null;
+
+  return {
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    profileImage: user.profileImage,
+    isEmailVerified: user.isEmailVerified,
+    authProvider: user.authProvider,
+  };
+};
 
 const makeOTPExpiry = () => new Date(Date.now() + 10 * 60 * 1000);
 
+// Generate, save, and email a six-digit verification code.
 const sendVerificationOTP = async (user) => {
   const otp = generateOTP();
 
   user.otp = hashOTP(otp);
   user.otpExpiresAt = makeOTPExpiry();
+
   await user.save();
 
   await sendEmail({
@@ -39,6 +47,7 @@ const sendVerificationOTP = async (user) => {
   });
 };
 
+// REGISTER
 export const register = async (req, res, next) => {
   try {
     const { name, email, password, confirmPassword } = req.body;
@@ -74,7 +83,10 @@ export const register = async (req, res, next) => {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    const existingUser = await User.findOne({ email: normalizedEmail });
+
+    const existingUser = await User.findOne({
+      email: normalizedEmail,
+    });
 
     if (existingUser) {
       return res.status(409).json({
@@ -95,11 +107,13 @@ export const register = async (req, res, next) => {
     try {
       await sendVerificationOTP(user);
     } catch (emailError) {
+      // Preserve the original behavior: remove the new account
+      // if its initial verification email cannot be sent.
       await User.deleteOne({ _id: user._id });
       throw emailError;
     }
 
-    res.status(201).json({
+    return res.status(201).json({
       message: "Account created. Check your email for the verification code.",
       user: publicUser(user),
     });
@@ -110,10 +124,11 @@ export const register = async (req, res, next) => {
       });
     }
 
-    next(error);
+    return next(error);
   }
 };
 
+// VERIFY EMAIL
 export const verifyEmail = async (req, res, next) => {
   try {
     const { email, otp } = req.body;
@@ -148,53 +163,64 @@ export const verifyEmail = async (req, res, next) => {
     user.isEmailVerified = true;
     user.otp = undefined;
     user.otpExpiresAt = undefined;
+
     await user.save();
 
     const token = generateToken(user._id);
     setAuthCookie(res, token);
 
-    res.json({
+    return res.json({
       message: "Email verified successfully.",
       user: publicUser(user),
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 };
 
+// RESEND OTP
 export const resendOTP = async (req, res, next) => {
   try {
     const { email } = req.body;
 
     if (!email) {
-      return res.status(400).json({ message: "Email is required." });
+      return res.status(400).json({
+        message: "Email is required.",
+      });
     }
 
     const user = await User.findOne({
       email: email.trim().toLowerCase(),
     }).select("+otp +otpExpiresAt");
 
-    // Avoid revealing whether an email address has an account.
+    // Do not reveal whether an account exists.
     if (!user || user.isEmailVerified) {
       return res.json({
         message: "If verification is needed, a code will be sent.",
       });
     }
 
-    if (user.otpExpiresAt && user.otpExpiresAt.getTime() > Date.now() - 9 * 60 * 1000) {
+    // Do not resend while the current code is still valid.
+    if (
+      user.otpExpiresAt &&
+      user.otpExpiresAt.getTime() > Date.now()
+    ) {
       return res.status(429).json({
-        message: "Please wait before requesting another code.",
+        message: "Your current code is still valid. Please wait for it to expire.",
       });
     }
 
     await sendVerificationOTP(user);
 
-    res.json({ message: "If verification is needed, a code will be sent." });
+    return res.json({
+      message: "If verification is needed, a code will be sent.",
+    });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 };
 
+// LOGIN
 export const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
@@ -230,37 +256,53 @@ export const login = async (req, res, next) => {
       });
     }
 
-    setAuthCookie(res, generateToken(user._id));
+    const token = generateToken(user._id);
+    setAuthCookie(res, token);
 
-    res.json({
+    return res.json({
       message: "Login successful.",
       user: publicUser(user),
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 };
 
+// LOGOUT
 export const logout = (req, res) => {
   clearAuthCookie(res);
-  res.json({ message: "Logged out successfully." });
+
+  return res.json({
+    message: "Logged out successfully.",
+  });
 };
 
+// CURRENT USER
 export const getMe = (req, res) => {
-  res.json({ user: publicUser(req.user) });
+  // /auth/me must also work when no session exists.
+  if (!req.user) {
+    return res.json({ user: null });
+  }
+
+  return res.json({
+    user: publicUser(req.user),
+  });
 };
 
+// FORGOT PASSWORD
 export const forgotPassword = async (req, res, next) => {
   try {
     const { email } = req.body;
 
     if (!email) {
-      return res.status(400).json({ message: "Email is required." });
+      return res.status(400).json({
+        message: "Email is required.",
+      });
     }
 
     const user = await User.findOne({
       email: email.trim().toLowerCase(),
-    }).select('+password');
+    }).select("+password");
 
     // Keep the response the same whether the account exists or not.
     if (!user || !user.password) {
@@ -276,11 +318,20 @@ export const forgotPassword = async (req, res, next) => {
       .update(rawToken)
       .digest("hex");
 
-    user.resetPasswordExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    user.resetPasswordExpiresAt = new Date(
+      Date.now() + 15 * 60 * 1000
+    );
+
     await user.save();
 
+    const clientURL = (process.env.CLIENT_URL || "").replace(/\/+$/, "");
+
+    if (!clientURL) {
+      throw new Error("CLIENT_URL is not configured on the server.");
+    }
+
     const resetUrl =
-      `${process.env.CLIENT_URL}/reset-password?token=${rawToken}` +
+      `${clientURL}/reset-password?token=${rawToken}` +
       `&email=${encodeURIComponent(user.email)}`;
 
     try {
@@ -295,18 +346,21 @@ export const forgotPassword = async (req, res, next) => {
     } catch (emailError) {
       user.resetPasswordToken = undefined;
       user.resetPasswordExpiresAt = undefined;
+
       await user.save();
+
       throw emailError;
     }
 
-    res.json({
+    return res.json({
       message: "If an eligible account exists, reset instructions will be sent.",
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 };
 
+// RESET PASSWORD
 export const resetPassword = async (req, res, next) => {
   try {
     const { email, token, password, confirmPassword } = req.body;
@@ -344,7 +398,9 @@ export const resetPassword = async (req, res, next) => {
       email: email.trim().toLowerCase(),
       resetPasswordToken: hashedToken,
       resetPasswordExpiresAt: { $gt: new Date() },
-    }).select("+resetPasswordToken +resetPasswordExpiresAt +password");
+    }).select(
+      "+resetPasswordToken +resetPasswordExpiresAt +password"
+    );
 
     if (!user) {
       return res.status(400).json({
@@ -355,12 +411,13 @@ export const resetPassword = async (req, res, next) => {
     user.password = await bcrypt.hash(password, 12);
     user.resetPasswordToken = undefined;
     user.resetPasswordExpiresAt = undefined;
+
     await user.save();
 
-    res.json({
+    return res.json({
       message: "Password reset successfully. Please log in.",
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 };
