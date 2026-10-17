@@ -17,6 +17,7 @@ import {
   generateToken,
   setAuthCookie,
 } from "../utils/token.js";
+import { optionalAuth } from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -56,7 +57,16 @@ router.post("/logout", logout);
  * Return the current authenticated user.
  * getMe must safely handle requests without a valid session.
  */
-router.get("/me", getMe);
+router.get(
+  "/me",
+  (req, res, next) => {
+    res.set("Cache-Control", "no-store");
+    next();
+  },
+  optionalAuth,
+  getMe
+);
+
 
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
