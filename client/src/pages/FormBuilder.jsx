@@ -78,6 +78,12 @@ export default function FormBuilder() {
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [activeTab, setActiveTab] = useState("questions");
+   useEffect(() => {
+      window.scrollTo({
+        top: 0,
+        left: 0,
+        behavior: "instant",
+      })})
 
   useEffect(() => {
     let active = true;

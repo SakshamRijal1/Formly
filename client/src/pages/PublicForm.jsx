@@ -39,6 +39,12 @@ export default function PublicForm() {
   const [uploading, setUploading] = useState({});
 
   // Warn users before refreshing or closing the page.
+   useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "instant",
+    })})
   useEffect(() => {
     const hasUnsavedData = () => {
       const hasAnswers = Object.values(answers).some((answer) => {

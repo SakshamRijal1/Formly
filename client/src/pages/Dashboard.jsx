@@ -122,7 +122,12 @@ export default function Dashboard() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-
+ useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "instant",
+    })})
   const loadForms = useCallback(async () => {
     setLoading(true);
     try {

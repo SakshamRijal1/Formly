@@ -38,9 +38,17 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [password, setPassword] = useState(INITIAL_PASSWORD);
+    useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "instant",
+    })})
 
   // Keep local state synchronized with authentication state.
+  
   useEffect(() => {
+
     setName(user?.name || "");
     setProfileImage(user?.profileImage || "");
     setImageLoadError(false);

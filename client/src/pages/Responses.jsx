@@ -155,6 +155,12 @@ export default function Responses() {
     const { data } = await api.get(`/responses/${id}`);
     setResponses(data.responses || []);
   }, [id]);
+   useEffect(() => {
+      window.scrollTo({
+        top: 0,
+        left: 0,
+        behavior: "instant",
+      })})
 
   useEffect(() => {
     if (!id) return;
