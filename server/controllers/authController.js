@@ -293,6 +293,7 @@ export const getMe = (req, res) => {
 
 export const forgotPassword = async (req, res, next) => {
   try {
+    console.log(req)
     const email =
       typeof req.body?.email === "string"
         ? req.body.email.trim().toLowerCase()
@@ -308,8 +309,9 @@ export const forgotPassword = async (req, res, next) => {
     const user = await User.findOne({ email }).select(
       "+resetPasswordToken +resetPasswordExpiresAt +password"
     );
-
+console.log(user)
     if (!user || !user.password) {
+      console.log("On the !user and !user.password ")
       return res.json({
         message:
           "If an eligible account exists, reset instructions will be sent.",
@@ -318,6 +320,7 @@ export const forgotPassword = async (req, res, next) => {
 
     // Generate a cryptographically secure, single-use token.
     const rawToken = crypto.randomBytes(32).toString("hex");
+    
 
     const hashedToken = crypto
       .createHash("sha256")
@@ -326,6 +329,7 @@ export const forgotPassword = async (req, res, next) => {
 
     const clientURL = process.env.CLIENT_URL?.replace(/\/+$/, "");
 
+    console.log(clientURL)
     // if (!clientURL || !/^https:\/\//i.test(clientURL)) {
     //   throw new Error(
     //     "CLIENT_URL must be configured as an HTTPS URL."
@@ -343,7 +347,7 @@ export const forgotPassword = async (req, res, next) => {
     const resetUrl = new URL("/reset-password", clientURL);
     resetUrl.searchParams.set("token", rawToken);
     resetUrl.searchParams.set("email", user.email);
-
+console.log("Sendging email")
     try {
       await sendEmail({
         to: user.email,
