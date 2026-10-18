@@ -1,15 +1,22 @@
 
-import { useCallback, useEffect, useState } from "react";
-
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   Download,
   LoaderCircle,
   MessageSquareText,
-  Volume2,
-  VolumeX,
+  BarChart3,
 } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 
 import toast from "react-hot-toast";
 import { api, getErrorMessage } from "../services/api";
@@ -39,8 +46,7 @@ function getAnswerValue(value) {
 }
 
 // Display uploaded files and images when their URLs are available.
-// If only asset IDs were saved, show the IDs safely instead.
-
+// If only asset IDs were saved, show protected download links.
 function UploadedFiles({ value, formId }) {
   const files = Array.isArray(value)
     ? value
@@ -56,24 +62,28 @@ function UploadedFiles({ value, formId }) {
     return <span>No answer</span>;
   }
 
-  // Handle files whose metadata and URL were saved.
   if (files.length > 0) {
     return (
       <div className="space-y-3">
         {files.map((file, index) => {
           const isString = typeof file === "string";
+
           const name = isString
             ? `Uploaded file ${index + 1}`
-            : file?.name || file?.originalName || `Uploaded file ${index + 1}`;
+            : file?.name ||
+              file?.originalName ||
+              `Uploaded file ${index + 1}`;
 
           const assetId = isString ? "" : file?.assetId;
 
-          // Prefer the protected backend route when an asset ID exists.
-          const href = assetId && formId
-            ? `${api.defaults.baseURL}/responses/${encodeURIComponent(formId)}/files/${encodeURIComponent(assetId)}`
-            : isString
-              ? file
-              : file?.url;
+          const href =
+            assetId && formId
+              ? `${api.defaults.baseURL}/responses/${encodeURIComponent(
+                  formId
+                )}/files/${encodeURIComponent(assetId)}`
+              : isString
+                ? file
+                : file?.url;
 
           if (!href) {
             return <p key={index}>{name}</p>;
@@ -96,25 +106,234 @@ function UploadedFiles({ value, formId }) {
     );
   }
 
-  // Handle the assetIds format used by your current responses.
   return (
     <div className="space-y-3">
       {assetIds.map((assetId, index) => (
         <a
           key={`${assetId}-${index}`}
-          href={`${api.defaults.baseURL}/responses/${encodeURIComponent(formId)}/files/${encodeURIComponent(assetId)}`}
+          href={`${api.defaults.baseURL}/responses/${encodeURIComponent(
+            formId
+          )}/files/${encodeURIComponent(assetId)}`}
           target="_blank"
           rel="noreferrer"
           className="inline-flex items-center gap-2 break-all font-semibold text-violet-600 hover:underline dark:text-violet-300"
         >
           <Download size={16} />
-          View / download PDF {index + 1}
+          View / download file {index + 1}
         </a>
       ))}
     </div>
   );
 }
 
+// Question types that have meaningful selectable labels or rating values.
+const CHARTABLE_TYPES = new Set([
+  "multiple-choice",
+  "single-choice",
+  "multiplechoice",
+  "singlechoice",
+  "checkboxes",
+  "checkbox",
+  "dropdown",
+  "select",
+  "radio",
+  "rating",
+  "yes-no",
+  "yesno",
+]);
+
+// Normalize saved answers so analytics can count selected labels.
+function getAnalyticsLabels(value) {
+  if (value === null || value === undefined || value === "") {
+    return [];
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => getAnalyticsLabels(item));
+  }
+
+  if (typeof value === "object") {
+    return [];
+  }
+
+  const label = String(value).trim();
+  return label ? [label] : [];
+}
+
+// Calculate response statistics for an individual question.
+function getQuestionAnalytics(question, responses) {
+  const type = String(question.type || "")
+    .toLowerCase()
+    .replace(/[\s_]+/g, "-");
+
+  if (!CHARTABLE_TYPES.has(type)) {
+    return null;
+  }
+
+  const counts = new Map();
+  let answeredCount = 0;
+
+  responses.forEach((response) => {
+    const answer = response.answers?.find(
+      (item) =>
+        String(item.questionId) === String(question._id)
+    );
+
+    const labels = getAnalyticsLabels(answer?.value);
+
+    if (!labels.length) return;
+
+    answeredCount += 1;
+
+    labels.forEach((label) => {
+      counts.set(label, (counts.get(label) || 0) + 1);
+    });
+  });
+
+  const data = [...counts.entries()]
+    .map(([label, count]) => ({
+      label,
+      count,
+    }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+    .slice(0, 10);
+
+  return {
+    questionId: question._id,
+    title: question.title || "Untitled question",
+    data,
+    answeredCount,
+    totalSelections: [...counts.values()].reduce(
+      (total, count) => total + count,
+      0
+    ),
+    highest: data[0] || null,
+  };
+}
+
+// Reusable chart card for each supported question.
+function AnalyticsCard({ item }) {
+  const highestPercentage =
+    item.totalSelections > 0
+      ? Math.round(
+          (item.highest.count / item.totalSelections) * 100
+        )
+      : 0;
+
+  return (
+    <article className="surface min-w-0 p-5 sm:p-6">
+      <div className="mb-5">
+        <div className="flex items-center gap-2 text-violet-600 dark:text-violet-300">
+          <BarChart3 size={17} />
+          <span className="text-xs font-bold uppercase tracking-wider">
+            Question analytics
+          </span>
+        </div>
+
+        <h3 className="mt-3 break-words text-base font-bold">
+          {item.title}
+        </h3>
+
+        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+          {item.answeredCount}{" "}
+          {item.answeredCount === 1
+            ? "respondent answered"
+            : "respondents answered"}
+        </p>
+      </div>
+
+      {item.highest && (
+        <div className="mb-5 rounded-xl border border-violet-200 bg-violet-50 p-4 dark:border-violet-400/20 dark:bg-violet-500/10">
+          <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
+            Most selected answer
+          </p>
+
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+            <span className="break-words font-bold text-violet-700 dark:text-violet-300">
+              {item.highest.label}
+            </span>
+
+            <span className="shrink-0 rounded-lg bg-white px-3 py-1.5 text-sm font-extrabold text-violet-700 dark:bg-slate-900 dark:text-violet-300">
+              {item.highest.count}{" "}
+              {item.highest.count === 1
+                ? "selection"
+                : "selections"}
+            </span>
+          </div>
+
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            {highestPercentage}% of all recorded selections
+          </p>
+        </div>
+      )}
+
+      <div className="h-72 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={item.data}
+            margin={{
+              top: 8,
+              right: 12,
+              left: -12,
+              bottom: 45,
+            }}
+          >
+            <CartesianGrid
+              strokeDasharray="3 3"
+              vertical={false}
+              stroke="currentColor"
+              opacity={0.12}
+            />
+
+            <XAxis
+              dataKey="label"
+              interval={0}
+              angle={-30}
+              textAnchor="end"
+              height={75}
+              tick={{ fontSize: 11 }}
+              tickFormatter={(value) =>
+                String(value).length > 16
+                  ? `${String(value).slice(0, 16)}…`
+                  : value
+              }
+            />
+
+            <YAxis
+              allowDecimals={false}
+              tick={{ fontSize: 12 }}
+            />
+
+            <Tooltip
+              cursor={{ fill: "#8b5cf6", opacity: 0.08 }}
+              formatter={(value) => [value, "Selections"]}
+              labelFormatter={(label) => `Answer: ${label}`}
+              contentStyle={{
+                borderRadius: 12,
+                border: "1px solid #ddd6fe",
+                fontSize: 12,
+              }}
+            />
+
+            <Bar
+              dataKey="count"
+              name="Selections"
+              fill="#8b5cf6"
+              radius={[6, 6, 0, 0]}
+              maxBarSize={52}
+            />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {item.data.length === 10 && (
+        <p className="mt-2 text-xs text-slate-500">
+          Showing up to 10 labels, ordered by selection count.
+        </p>
+      )}
+    </article>
+  );
+}
 
 export default function Responses() {
   const navigate = useNavigate();
@@ -123,8 +342,14 @@ export default function Responses() {
   const [form, setForm] = useState(null);
   const [responses, setResponses] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [soundEnabled, setSoundEnabled] = useState(true);
 
+  // Load the latest saved responses.
+  const loadResponses = useCallback(async () => {
+    const { data } = await api.get(`/responses/${id}`);
+    setResponses(data.responses || []);
+  }, [id]);
+
+  // Keep the original Socket.IO diagnostics.
   useEffect(() => {
     console.log("Socket connected:", socket.connected);
 
@@ -151,24 +376,26 @@ export default function Responses() {
     };
   }, []);
 
-  const loadResponses = useCallback(async () => {
-    const { data } = await api.get(`/responses/${id}`);
-    setResponses(data.responses || []);
-  }, [id]);
-   useEffect(() => {
-      window.scrollTo({
-        top: 0,
-        left: 0,
-        behavior: "instant",
-      })},[])
+  // Scroll to the top when the page mounts.
+  useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "instant",
+    });
+  }, []);
 
+  // Update response cards and analytics when a new response arrives.
   useEffect(() => {
     if (!id) return;
+
+    let active = true;
+    let refreshTimer;
 
     const handleNewResponse = (event) => {
       if (String(event?.formId) !== String(id)) return;
 
-      // Avoid duplicate entries if an event is delivered more than once.
+      // Prevent unnecessary repeated refreshes for the same event.
       setResponses((current) => {
         if (
           current.some(
@@ -179,26 +406,37 @@ export default function Responses() {
           return current;
         }
 
-        // Fetch the full response from the existing API.
-        loadResponses().catch((error) => {
-          toast.error(getErrorMessage(error));
-        });
-
         return current;
       });
+
+      // Fetch complete response records from the existing API.
+      // This also refreshes the charts using the saved answer data.
+      clearTimeout(refreshTimer);
+
+      refreshTimer = setTimeout(() => {
+        if (active) {
+          loadResponses().catch((error) => {
+            toast.error(getErrorMessage(error));
+          });
+        }
+      }, 150);
     };
 
     socket.on("response:new", handleNewResponse);
 
     return () => {
+      active = false;
+      clearTimeout(refreshTimer);
       socket.off("response:new", handleNewResponse);
     };
   }, [id, loadResponses]);
 
+  // Load the form and its existing responses.
   useEffect(() => {
     let active = true;
 
     setLoading(true);
+    setForm(null);
 
     Promise.all([
       api.get(`/forms/${id}`),
@@ -211,7 +449,9 @@ export default function Responses() {
         setResponses(responseResult.data.responses || []);
       })
       .catch((error) => {
-        if (active) toast.error(getErrorMessage(error));
+        if (active) {
+          toast.error(getErrorMessage(error));
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -222,6 +462,16 @@ export default function Responses() {
     };
   }, [id]);
 
+  // Automatically calculate charts from the current responses.
+  const analytics = useMemo(() => {
+    return (form?.questions || [])
+      .map((question) =>
+        getQuestionAnalytics(question, responses)
+      )
+      .filter((item) => item && item.data.length > 0);
+  }, [form, responses]);
+
+  // Export all response records to CSV.
   const downloadCSV = () => {
     const questions = form?.questions || [];
 
@@ -232,19 +482,20 @@ export default function Responses() {
       ["Submitted at", "Email", ...questions.map((q) => q.title)],
       ...responses.map((response) => {
         const answerMap = new Map(
-          response.answers.map((answer) => [
+          (response.answers || []).map((answer) => [
             String(answer.questionId),
             answer.value,
           ])
         );
 
         return [
-          new Date(response.createdAt).toISOString(),
+          response.createdAt
+            ? new Date(response.createdAt).toISOString()
+            : "",
           response.respondentEmail || "",
           ...questions.map((question) => {
             const value = answerMap.get(String(question._id));
 
-            // Export uploaded asset IDs without causing an object error.
             if (
               value &&
               typeof value === "object" &&
@@ -253,7 +504,6 @@ export default function Responses() {
               return value.assetIds.join(", ");
             }
 
-            // Also support saved file metadata if present.
             if (
               value &&
               typeof value === "object" &&
@@ -270,7 +520,13 @@ export default function Responses() {
             }
 
             if (Array.isArray(value)) {
-              return value.join(", ");
+              return value
+                .map((item) =>
+                  item && typeof item === "object"
+                    ? JSON.stringify(item)
+                    : String(item)
+                )
+                .join(", ");
             }
 
             if (value && typeof value === "object") {
@@ -299,7 +555,10 @@ export default function Responses() {
       form?.title || "form"
     ).replace(/[^a-z0-9-_]/gi, "_")}-responses.csv`;
 
+    document.body.appendChild(link);
     link.click();
+    link.remove();
+
     URL.revokeObjectURL(url);
   };
 
@@ -324,6 +583,7 @@ export default function Responses() {
 
   return (
     <div className="space-y-6">
+      {/* Page heading and actions */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <Link
@@ -346,27 +606,9 @@ export default function Responses() {
 
         <div className="flex flex-wrap items-center gap-3">
           <button
-            type="button"
-            onClick={() => setSoundEnabled((enabled) => !enabled)}
-            className="btn-secondary"
-            title={
-              soundEnabled
-                ? "Mute notification sound"
-                : "Enable notification sound"
-            }
-          >
-            {soundEnabled ? (
-              <Volume2 size={17} />
-            ) : (
-              <VolumeX size={17} />
-            )}
-            {soundEnabled ? "Sound on" : "Sound off"}
-          </button>
-
-          <button
             onClick={downloadCSV}
             disabled={!responses.length}
-            className="btn-primary"
+            className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Download size={17} />
             Export CSV
@@ -374,6 +616,7 @@ export default function Responses() {
         </div>
       </div>
 
+      {/* Original total responses summary */}
       <div className="surface p-6">
         <div className="flex items-center gap-4">
           <div className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300">
@@ -384,6 +627,7 @@ export default function Responses() {
             <p className="text-2xl font-extrabold">
               {responses.length}
             </p>
+
             <p className="text-sm text-slate-500">
               Total submissions · Live updates
             </p>
@@ -391,6 +635,47 @@ export default function Responses() {
         </div>
       </div>
 
+      {/* New response analytics section */}
+      <section className="space-y-5">
+        <div>
+          <h2 className="text-xl font-extrabold tracking-tight">
+            Response Analytics
+          </h2>
+
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            See which answers respondents select most frequently.
+          </p>
+        </div>
+
+        {analytics.length === 0 ? (
+          <div className="surface p-6 text-center">
+            <BarChart3
+              size={30}
+              className="mx-auto text-slate-400"
+            />
+
+            <h3 className="mt-3 font-bold">
+              No chart data available yet
+            </h3>
+
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+              Charts appear for supported choice and rating
+              questions after respondents submit answers.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+            {analytics.map((item) => (
+              <AnalyticsCard
+                key={String(item.questionId)}
+                item={item}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Original response list */}
       {!responses.length ? (
         <div className="surface px-6 py-14 text-center">
           <MessageSquareText
@@ -416,6 +701,10 @@ export default function Responses() {
         </div>
       ) : (
         <div className="space-y-4">
+          <h2 className="text-xl font-extrabold tracking-tight">
+            Individual Responses
+          </h2>
+
           {responses.map((response) => (
             <article
               key={response._id}
@@ -428,13 +717,15 @@ export default function Responses() {
                 </span>
 
                 <time className="text-xs text-slate-400">
-                  {new Date(response.createdAt).toLocaleString()}
+                  {response.createdAt
+                    ? new Date(response.createdAt).toLocaleString()
+                    : "Date unavailable"}
                 </time>
               </div>
 
               <div className="space-y-4">
-                {form.questions.map((question) => {
-                  const answer = response.answers.find(
+                {(form.questions || []).map((question) => {
+                  const answer = (response.answers || []).find(
                     (item) =>
                       String(item.questionId) ===
                       String(question._id)
@@ -451,7 +742,10 @@ export default function Responses() {
                           "file-upload",
                           "image-upload",
                         ].includes(question.type) ? (
-                  <UploadedFiles value={answer?.value} formId={id} />
+                          <UploadedFiles
+                            value={answer?.value}
+                            formId={id}
+                          />
                         ) : question.type === "rating" ? (
                           <span>
                             {answer?.value !== null &&
