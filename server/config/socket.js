@@ -33,10 +33,10 @@ const parseCookies = (rawCookie = "") => {
 
 export const initializeSocket = (httpServer) => {
   io = new Server(httpServer, {
-    cors: {
-      origin: process.env.CLIENT_URL ,
-      credentials: true,
-    },
+ cors: {
+  origin: process.env.CLIENT_URL?.replace(/\/+$/, ""),
+  credentials: true,
+},
   });
 
   io.use(async (socket, next) => {
