@@ -326,11 +326,11 @@ export const forgotPassword = async (req, res, next) => {
 
     const clientURL = process.env.CLIENT_URL?.replace(/\/+$/, "");
 
-    if (!clientURL || !/^https:\/\//i.test(clientURL)) {
-      throw new Error(
-        "CLIENT_URL must be configured as an HTTPS URL."
-      );
-    }
+    // if (!clientURL || !/^https:\/\//i.test(clientURL)) {
+    //   throw new Error(
+    //     "CLIENT_URL must be configured as an HTTPS URL."
+    //   );
+    // }
 
     // Save only the hash of the reset token.
     user.resetPasswordToken = hashedToken;
