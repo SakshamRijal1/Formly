@@ -24,6 +24,19 @@ const publicUser = (user) => {
   };
 };
 
+function escapeHtml(value = "") {
+  const entities = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  };
+
+  return String(value).replace(/[&<>"']/g, (char) => entities[char]);
+}
+
+
 const makeOTPExpiry = () => new Date(Date.now() + 10 * 60 * 1000);
 
 // Generate, save, and email a six-digit verification code.
