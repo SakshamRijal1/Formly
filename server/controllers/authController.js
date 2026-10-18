@@ -292,51 +292,119 @@ export const getMe = (req, res) => {
 // FORGOT PASSWORD
 
 export const forgotPassword = async (req, res, next) => {
+  let user = null;
+
   try {
-    console.log(req)
+    console.log("[Forgot Password] Request received.");
+
+    // 1. Validate email input
     const email =
       typeof req.body?.email === "string"
         ? req.body.email.trim().toLowerCase()
         : "";
 
     if (!email) {
+      console.warn("[Forgot Password] Email is missing.");
+
       return res.status(400).json({
-        message: "Email is required.",
+        success: false,
+        message: "Please enter your email address.",
       });
     }
 
-    // Avoid revealing whether an account exists.
-    const user = await User.findOne({ email }).select(
-      "+resetPasswordToken +resetPasswordExpiresAt +password"
+    // Basic email validation
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailPattern.test(email)) {
+      console.warn("[Forgot Password] Invalid email format.");
+
+      return res.status(400).json({
+        success: false,
+        message: "Please enter a valid email address.",
+      });
+    }
+
+    console.log("[Forgot Password] Input validated.");
+
+    // 2. Validate frontend URL configuration
+    const clientURL = process.env.CLIENT_URL?.trim().replace(/\/+$/, "");
+
+    if (!clientURL) {
+      console.error("[Forgot Password] CLIENT_URL is missing.");
+
+      throw new Error("CLIENT_URL is not configured.");
+    }
+
+    let parsedClientURL;
+
+    try {
+      parsedClientURL = new URL(clientURL);
+    } catch {
+      console.error("[Forgot Password] CLIENT_URL is invalid.");
+
+      throw new Error("CLIENT_URL must be a valid URL.");
+    }
+
+    if (
+      parsedClientURL.protocol !== "https:" &&
+      process.env.NODE_ENV === "production"
+    ) {
+      console.error(
+        "[Forgot Password] Production CLIENT_URL must use HTTPS."
+      );
+
+      throw new Error(
+        "CLIENT_URL must be configured as an HTTPS URL."
+      );
+    }
+
+    if (
+      process.env.NODE_ENV === "production" &&
+      parsedClientURL.hostname !== "formly-green.vercel.app"
+    ) {
+      console.error(
+        "[Forgot Password] Unexpected production frontend hostname."
+      );
+
+      throw new Error("Production CLIENT_URL is not the expected frontend.");
+    }
+
+    console.log("[Forgot Password] Frontend URL validated.");
+
+    // 3. Find eligible local-password account.
+    // Do not reveal whether an email is registered.
+    user = await User.findOne({ email }).select(
+      "+password +resetPasswordToken +resetPasswordExpiresAt"
     );
-console.log(user)
+
     if (!user || !user.password) {
-      console.log("On the !user and !user.password ")
+      console.log(
+        "[Forgot Password] No eligible local-password account found."
+      );
+
       return res.json({
+        success: true,
         message:
           "If an eligible account exists, reset instructions will be sent.",
       });
     }
 
-    // Generate a cryptographically secure, single-use token.
+    console.log("[Forgot Password] Eligible account found.");
+
+    // 4. Generate a secure, single-use reset token.
     const rawToken = crypto.randomBytes(32).toString("hex");
-    
 
     const hashedToken = crypto
       .createHash("sha256")
       .update(rawToken)
       .digest("hex");
 
-    const clientURL = process.env.CLIENT_URL?.replace(/\/+$/, "");
+    const resetUrl = new URL("/reset-password", parsedClientURL.origin);
 
-    console.log(clientURL)
-    // if (!clientURL || !/^https:\/\//i.test(clientURL)) {
-    //   throw new Error(
-    //     "CLIENT_URL must be configured as an HTTPS URL."
-    //   );
-    // }
+    resetUrl.searchParams.set("token", rawToken);
+    resetUrl.searchParams.set("email", user.email);
 
-    // Save only the hash of the reset token.
+    // 5. Store only the token hash. Expire in 15 minutes.
     user.resetPasswordToken = hashedToken;
     user.resetPasswordExpiresAt = new Date(
       Date.now() + 15 * 60 * 1000
@@ -344,10 +412,9 @@ console.log(user)
 
     await user.save();
 
-    const resetUrl = new URL("/reset-password", clientURL);
-    resetUrl.searchParams.set("token", rawToken);
-    resetUrl.searchParams.set("email", user.email);
-console.log("Sendging email")
+    console.log("[Forgot Password] Reset token saved.");
+
+    // 6. Send reset email.
     try {
       await sendEmail({
         to: user.email,
@@ -370,24 +437,47 @@ console.log("Sendging email")
         `,
         text: `Reset your Formly password using this link: ${resetUrl.toString()}. This link expires in 15 minutes.`,
       });
+
+      console.log("[Forgot Password] Reset email sent successfully.");
     } catch (emailError) {
-      // Invalidate the token if the email could not be sent.
+      console.error(
+        "[Forgot Password] Email delivery failed:",
+        emailError.message
+      );
+
+      // Invalidate the reset token if email delivery fails.
       user.resetPasswordToken = undefined;
       user.resetPasswordExpiresAt = undefined;
-      await user.save();
 
-      // Let Express's error handler report the delivery failure.
-      throw emailError;
+      try {
+        await user.save();
+        console.log("[Forgot Password] Unsent reset token invalidated.");
+      } catch (cleanupError) {
+        console.error(
+          "[Forgot Password] CRITICAL: Could not invalidate reset token:",
+          cleanupError.message
+        );
+      }
+
+      throw new Error("Password reset email could not be delivered.");
     }
 
+    // 7. Return a generic response.
     return res.json({
+      success: true,
       message:
         "If an eligible account exists, reset instructions will be sent.",
     });
   } catch (error) {
+    console.error(
+      "[Forgot Password] Request failed:",
+      error.message
+    );
+
     return next(error);
   }
 };
+
 
 
 // RESET PASSWORD
