@@ -74,23 +74,34 @@ router.post("/reset-password", resetPassword);
 /**
  * Start Google OAuth
  */
+
+/**
+ * Start Google OAuth
+ */
 router.get("/google", (req, res, next) => {
+  console.info("[Google OAuth] Step 1: Sign-in route reached.");
+
   const frontend = process.env.CLIENT_URL;
-  const googleConfigured =
-    process.env.GOOGLE_CLIENT_ID &&
-    process.env.GOOGLE_CLIENT_SECRET &&
-    process.env.GOOGLE_CALLBACK_URL;
+  const configured =
+    Boolean(process.env.GOOGLE_CLIENT_ID) &&
+    Boolean(process.env.GOOGLE_CLIENT_SECRET) &&
+    Boolean(process.env.GOOGLE_CALLBACK_URL);
 
   if (!frontend) {
+    console.error("[Google OAuth] CLIENT_URL is missing.");
     return res.status(500).send("Frontend URL is not configured.");
   }
 
-  if (!googleConfigured) {
-    return redirectToLogin(
-      res,
-      "Google login is not configured."
+  if (!configured) {
+    console.error("[Google OAuth] Google environment configuration missing.");
+
+    return res.redirect(
+      `${frontend.replace(/\/+$/, "")}/login?googleError=` +
+        encodeURIComponent("Google login is not configured.")
     );
   }
+
+  console.info("[Google OAuth] Step 2: Redirecting to Google.");
 
   return passport.authenticate("google", {
     scope: ["profile", "email"],
@@ -102,7 +113,31 @@ router.get("/google", (req, res, next) => {
  * Handle Google's callback
  */
 router.get("/google/callback", (req, res, next) => {
+  console.info("[Google OAuth] Step 3: Callback route reached.", {
+    hasAuthorizationCode: Boolean(req.query.code),
+    providerReturnedError: Boolean(req.query.error),
+  });
+
+  if (req.query.error) {
+    console.warn(
+      "[Google OAuth] Google returned an authorization error:",
+      String(req.query.error)
+    );
+
+    const frontend = process.env.CLIENT_URL?.replace(/\/+$/, "");
+
+    if (!frontend) {
+      return res.status(500).send("Frontend URL is not configured.");
+    }
+
+    return res.redirect(
+      `${frontend}/login?googleError=` +
+        encodeURIComponent("Google authorization was not completed.")
+    );
+  }
+
   if (!process.env.CLIENT_URL) {
+    console.error("[Google OAuth] CLIENT_URL is missing at callback.");
     return res.status(500).send("Frontend URL is not configured.");
   }
 
@@ -111,7 +146,11 @@ router.get("/google/callback", (req, res, next) => {
     { session: false },
     (error, user, info) => {
       if (error) {
-        // Keep internal errors and secrets out of the browser response.
+        console.error(
+          "[Google OAuth] Step 4 FAILED: Passport error:",
+          error.message
+        );
+
         return next(error);
       }
 
@@ -119,19 +158,41 @@ router.get("/google/callback", (req, res, next) => {
         const message =
           info?.message || "Google authentication failed.";
 
-        return redirectToLogin(res, message);
+        console.warn(
+          "[Google OAuth] Step 4 REJECTED:",
+          message
+        );
+
+        const frontend = process.env.CLIENT_URL.replace(/\/+$/, "");
+
+        return res.redirect(
+          `${frontend}/login?googleError=${encodeURIComponent(message)}`
+        );
       }
 
       try {
+        console.info(
+          "[Google OAuth] Step 5: Account authenticated. Creating JWT."
+        );
+
         const token = generateToken(user._id);
         setAuthCookie(res, token);
 
-        return res.redirect(`${clientURL()}/`);
+        console.info(
+          "[Google OAuth] Step 6: Auth cookie set; redirecting to frontend."
+        );
+
+        return res.redirect(
+          `${process.env.CLIENT_URL.replace(/\/+$/, "")}/`
+        );
       } catch (tokenError) {
+        console.error(
+          "[Google OAuth] JWT/cookie setup failed:",
+          tokenError.message
+        );
+
         return next(tokenError);
       }
     }
   )(req, res, next);
 });
-
-export default router;
