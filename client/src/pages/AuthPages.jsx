@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowRight,
@@ -162,15 +161,36 @@ function Field({ label, icon: Icon, type = "text", ...props }) {
 
 function GoogleButton({ disabled = false }) {
   const continueWithGoogle = () => {
-    const baseURL = api.defaults.baseURL?.replace(/\/+$/, "");
+    try {
+      const baseURL = api.defaults.baseURL?.trim();
 
-    if (!baseURL) {
-      toast.error("The API URL is not configured.");
-      return;
+      if (!baseURL) {
+        toast.error("The API URL is not configured.");
+        return;
+      }
+
+      // Resolve the OAuth endpoint using the configured API base URL.
+      // Example:
+      // https://formly-x8f0.onrender.com/api
+      // becomes:
+      // https://formly-x8f0.onrender.com/api/auth/google
+      const normalizedBaseURL = baseURL.replace(/\/+$/, "");
+      const googleURL = new URL(
+        `${normalizedBaseURL}/auth/google`,
+        window.location.origin
+      );
+
+      if (!["http:", "https:"].includes(googleURL.protocol)) {
+        toast.error("The Google authentication URL is invalid.");
+        return;
+      }
+
+      // OAuth must use a full browser redirect, not an Axios request.
+      window.location.assign(googleURL.href);
+    } catch (error) {
+      console.error("Google OAuth redirect error:", error);
+      toast.error("Unable to start Google sign-in. Please try again.");
     }
-
-    // Redirect to the Google OAuth endpoint on your backend.
-    window.location.assign(`${baseURL}/auth/google`);
   };
 
   return (
@@ -243,6 +263,31 @@ export function Login() {
     password: "",
   });
 
+  // Display OAuth errors sent back by the backend.
+  // Example: /login?googleError=Google%20authentication%20failed
+  useEffect(() => {
+    const googleError = searchParams.get("googleError");
+
+    if (!googleError) return;
+
+    toast.error(googleError);
+
+    // Remove only the Google error parameter.
+    // Preserve other query parameters such as "next".
+    const params = new URLSearchParams(searchParams);
+    params.delete("googleError");
+
+    const query = params.toString();
+
+    navigate(
+      {
+        pathname: "/login",
+        search: query ? `?${query}` : "",
+      },
+      { replace: true }
+    );
+  }, [searchParams, navigate]);
+
   const update = (event) => {
     setForm((current) => ({
       ...current,
@@ -259,9 +304,12 @@ export function Login() {
 
       const next = searchParams.get("next");
 
-      navigate(next?.startsWith("/") ? next : "/", {
-        replace: true,
-      });
+      navigate(
+        next?.startsWith("/") && !next.startsWith("//")
+          ? next
+          : "/",
+        { replace: true }
+      );
     } catch (error) {
       if (error.response?.data?.code === "EMAIL_NOT_VERIFIED") {
         navigate(
