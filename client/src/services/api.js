@@ -21,6 +21,21 @@ api.interceptors.request.use(
   (config) => {
     const url = config.url || "";
     const isAuthRequest = url.includes("/auth/");
+    const isFormData =
+      typeof FormData !== "undefined" &&
+      config.data instanceof FormData;
+
+    // Let Axios/browser set the multipart boundary for file uploads.
+    if (isFormData) {
+      config.headers.delete?.("Content-Type");
+      config.headers.delete?.("content-type");
+
+      // Fallback for header objects without a delete method.
+      if (config.headers && typeof config.headers.delete !== "function") {
+        delete config.headers["Content-Type"];
+        delete config.headers["content-type"];
+      }
+    }
 
     if (isAuthRequest) {
       console.info("[Formly API] Request:", {
@@ -31,10 +46,30 @@ api.interceptors.request.use(
       });
     }
 
+    if (isFormData) {
+      console.info("[Formly API] File upload request:", {
+        endpoint: url,
+        fields: [...config.data.entries()].map(([key, value]) => ({
+          key,
+          value:
+            typeof File !== "undefined" && value instanceof File
+              ? {
+                  name: value.name,
+                  size: value.size,
+                  type: value.type,
+                }
+              : value,
+        })),
+      });
+    }
+
     return config;
   },
   (error) => {
-    console.error("[Formly API] Request setup failed:", error.message);
+    console.error(
+      "[Formly API] Request setup failed:",
+      error.message
+    );
     return Promise.reject(error);
   }
 );
@@ -68,10 +103,7 @@ api.interceptors.response.use(
 );
 
 // Compatibility helper used by the auth pages.
-export const getErrorMessage = (error) => {
-  return (
-    error.response?.data?.message ||
-    error.message ||
-    "Something went wrong. Please try again."
-  );
-};
+export const getErrorMessage = (error) =>
+  error.response?.data?.message ||
+  error.message ||
+  "Something went wrong. Please try again.";
