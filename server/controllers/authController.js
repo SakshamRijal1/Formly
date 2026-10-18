@@ -27,6 +27,7 @@ const publicUser = (user) => {
 const makeOTPExpiry = () => new Date(Date.now() + 10 * 60 * 1000);
 
 // Generate, save, and email a six-digit verification code.
+
 const sendVerificationOTP = async (user) => {
   const otp = generateOTP();
 
@@ -37,15 +38,148 @@ const sendVerificationOTP = async (user) => {
 
   await sendEmail({
     to: user.email,
-    subject: "Verify your Formly email",
+    subject: `${otp} is your Formly verification code`,
     html: `
-      <h2>Welcome to Formly!</h2>
-      <p>Your verification code is:</p>
-      <h1 style="letter-spacing:6px">${otp}</h1>
-      <p>This code expires in 10 minutes. Do not share it with anyone.</p>
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="color-scheme" content="light" />
+        <title>Verify your Formly email</title>
+      </head>
+
+      <body style="margin:0;padding:0;background-color:#f5f6fa;font-family:Arial,Helvetica,sans-serif;color:#172033;">
+
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
+          style="background-color:#f5f6fa;padding:36px 12px;">
+          <tr>
+            <td align="center">
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
+                style="max-width:560px;background-color:#ffffff;border-radius:18px;overflow:hidden;">
+
+                <!-- Brand header -->
+                <tr>
+                  <td align="center"
+                    style="background-color:#6d4aff;padding:32px 24px;">
+
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                      <tr>
+                        <td align="center"
+                          style="width:42px;height:42px;background-color:#ffffff;border-radius:12px;color:#6d4aff;font-size:25px;font-weight:bold;">
+                          F
+                        </td>
+                        <td style="padding-left:12px;color:#ffffff;font-size:27px;font-weight:bold;letter-spacing:-0.5px;">
+                          Formly
+                        </td>
+                      </tr>
+                    </table>
+
+                    <p style="margin:14px 0 0;color:#eee9ff;font-size:14px;line-height:22px;">
+                      Simple forms. Meaningful responses.
+                    </p>
+                  </td>
+                </tr>
+
+                <!-- Main content -->
+                <tr>
+                  <td style="padding:36px 30px 24px;">
+
+                    <p style="margin:0 0 12px;color:#6d4aff;font-size:12px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase;">
+                      Email verification
+                    </p>
+
+                    <h1 style="margin:0 0 16px;color:#172033;font-size:27px;line-height:36px;font-weight:700;">
+                      Welcome to Formly!
+                    </h1>
+
+                    <p style="margin:0 0 14px;color:#596579;font-size:15px;line-height:25px;">
+                      Hi ${escapeHtml(user.name || "there")},
+                    </p>
+
+                    <p style="margin:0 0 24px;color:#596579;font-size:15px;line-height:25px;">
+                      Thanks for creating your Formly account. Please verify your email address using the code below to finish setting up your account.
+                    </p>
+
+                    <!-- OTP card -->
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
+                      style="background-color:#f7f5ff;border:1px solid #e5ddff;border-radius:14px;">
+                      <tr>
+                        <td align="center" style="padding:24px 16px;">
+
+                          <p style="margin:0 0 14px;color:#6d4aff;font-size:12px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase;">
+                            Your verification code
+                          </p>
+
+                          <p style="margin:0;color:#4325c7;font-size:36px;font-weight:bold;letter-spacing:10px;line-height:48px;font-family:Arial,Helvetica,sans-serif;">
+                            ${otp}
+                          </p>
+
+                          <p style="margin:16px 0 0;color:#596579;font-size:13px;line-height:21px;">
+                            This code expires in <strong>10 minutes</strong>.
+                          </p>
+
+                        </td>
+                      </tr>
+                    </table>
+
+                    <p style="margin:24px 0 0;color:#596579;font-size:14px;line-height:23px;">
+                      Enter this code on the Formly verification page. You do not need to reply to this email.
+                    </p>
+
+                    <!-- Security notice -->
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
+                      style="margin-top:24px;background-color:#fff8eb;border-left:4px solid #f4b740;">
+                      <tr>
+                        <td style="padding:14px 16px;">
+                          <p style="margin:0;color:#805a16;font-size:13px;line-height:21px;">
+                            <strong>Security tip:</strong> Never share this code with anyone. Formly will never ask you to disclose your verification code to another person.
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <p style="margin:24px 0 0;color:#596579;font-size:14px;line-height:23px;">
+                      If you did not create a Formly account, you can safely ignore this email.
+                    </p>
+
+                    <p style="margin:28px 0 0;color:#172033;font-size:14px;line-height:23px;">
+                      Best regards,<br />
+                      <strong>The Formly Team</strong>
+                    </p>
+
+                  </td>
+                </tr>
+
+                <!-- Footer -->
+                <tr>
+                  <td align="center"
+                    style="padding:22px 24px;background-color:#fafaff;border-top:1px solid #eeeaf8;">
+
+                    <p style="margin:0 0 8px;color:#7b8495;font-size:12px;line-height:20px;">
+                      This is an automated security email.
+                    </p>
+
+                    <p style="margin:0;color:#9aa2b1;font-size:11px;line-height:18px;">
+                      © ${new Date().getFullYear()} Formly. All rights reserved.
+                    </p>
+
+                  </td>
+                </tr>
+
+              </table>
+
+            </td>
+          </tr>
+        </table>
+
+      </body>
+      </html>
     `,
   });
 };
+
 
 // REGISTER
 export const register = async (req, res, next) => {
