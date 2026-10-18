@@ -31,7 +31,16 @@ app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 app.use(cookieParser());
 app.use(passport.initialize());
+app.use("/api/auth", (req, res, next) => {
+  if (req.path === "/me") {
+    console.log("[Auth Debug] /auth/me request:", {
+      cookieReceived: Boolean(req.cookies?.formly_token),
+      origin: req.headers.origin,
+    });
+  }
 
+  next();
+});
 app.get("/", (req, res) => {
   res.json({ message: "Formly API is running." });
 });
