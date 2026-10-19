@@ -1,6 +1,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   Download,
@@ -195,7 +195,10 @@ function getQuestionAnalytics(question, responses) {
       label,
       count,
     }))
-    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+    .sort(
+      (a, b) =>
+        b.count - a.count || a.label.localeCompare(b.label)
+    )
     .slice(0, 10);
 
   return {
@@ -214,7 +217,7 @@ function getQuestionAnalytics(question, responses) {
 // Reusable chart card for each supported question.
 function AnalyticsCard({ item }) {
   const highestPercentage =
-    item.totalSelections > 0
+    item.totalSelections > 0 && item.highest
       ? Math.round(
           (item.highest.count / item.totalSelections) * 100
         )
@@ -336,7 +339,6 @@ function AnalyticsCard({ item }) {
 }
 
 export default function Responses() {
-  const navigate = useNavigate();
   const { id } = useParams();
 
   const [form, setForm] = useState(null);
@@ -349,43 +351,7 @@ export default function Responses() {
     setResponses(data.responses || []);
   }, [id]);
 
-  // Keep the original Socket.IO diagnostics.
-  useEffect(() => {
-    console.log("Socket connected:", socket.connected);
-
-    const onConnect = () => {
-      console.log("Socket connected successfully:", socket.id);
-    };
-
-    const onConnectError = (error) => {
-      console.error("Socket connection error:", error.message);
-    };
-
-    const handleNewResponse = (event) => {
-      console.log("New response event received:", event);
-    };
-
-    socket.on("connect", onConnect);
-    socket.on("connect_error", onConnectError);
-    socket.on("response:new", handleNewResponse);
-
-    return () => {
-      socket.off("connect", onConnect);
-      socket.off("connect_error", onConnectError);
-      socket.off("response:new", handleNewResponse);
-    };
-  }, []);
-
-  // Scroll to the top when the page mounts.
-  useEffect(() => {
-    window.scrollTo({
-      top: 0,
-      left: 0,
-      behavior: "instant",
-    });
-  }, []);
-
-  // Update response cards and analytics when a new response arrives.
+  // Handle real-time response updates without console logging.
   useEffect(() => {
     if (!id) return;
 
@@ -395,30 +361,14 @@ export default function Responses() {
     const handleNewResponse = (event) => {
       if (String(event?.formId) !== String(id)) return;
 
-      // Prevent unnecessary repeated refreshes for the same event.
-      setResponses((current) => {
-        if (
-          current.some(
-            (response) =>
-              String(response._id) === String(event.responseId)
-          )
-        ) {
-          return current;
-        }
-
-        return current;
-      });
-
-      // Fetch complete response records from the existing API.
-      // This also refreshes the charts using the saved answer data.
       clearTimeout(refreshTimer);
 
       refreshTimer = setTimeout(() => {
-        if (active) {
-          loadResponses().catch((error) => {
-            toast.error(getErrorMessage(error));
-          });
-        }
+        if (!active) return;
+
+        loadResponses().catch((error) => {
+          toast.error(getErrorMessage(error));
+        });
       }, 150);
     };
 
@@ -430,6 +380,15 @@ export default function Responses() {
       socket.off("response:new", handleNewResponse);
     };
   }, [id, loadResponses]);
+
+  // Scroll to the top when the page mounts.
+  useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "instant",
+    });
+  }, []);
 
   // Load the form and its existing responses.
   useEffect(() => {
@@ -513,7 +472,10 @@ export default function Responses() {
                 .map((file) =>
                   typeof file === "string"
                     ? file
-                    : file?.url || file?.name || file?.assetId || ""
+                    : file?.url ||
+                      file?.name ||
+                      file?.assetId ||
+                      ""
                 )
                 .filter(Boolean)
                 .join(", ");
@@ -616,7 +578,7 @@ export default function Responses() {
         </div>
       </div>
 
-      {/* Original total responses summary */}
+      {/* Total responses summary */}
       <div className="surface p-6">
         <div className="flex items-center gap-4">
           <div className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300">
@@ -635,7 +597,7 @@ export default function Responses() {
         </div>
       </div>
 
-      {/* New response analytics section */}
+      {/* Response analytics */}
       <section className="space-y-5">
         <div>
           <h2 className="text-xl font-extrabold tracking-tight">
@@ -675,7 +637,7 @@ export default function Responses() {
         )}
       </section>
 
-      {/* Original response list */}
+      {/* Individual responses */}
       {!responses.length ? (
         <div className="surface px-6 py-14 text-center">
           <MessageSquareText

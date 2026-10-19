@@ -471,7 +471,6 @@ export const forgotPassword = async (req, res, next) => {
       });
     }
 
-    console.log("[Forgot Password] Input validated.");
 
     // 2. Validate frontend URL configuration
     const clientURL = process.env.CLIENT_URL?.trim().replace(/\/+$/, "");
@@ -516,7 +515,7 @@ export const forgotPassword = async (req, res, next) => {
       throw new Error("Production CLIENT_URL is not the expected frontend.");
     }
 
-    console.log("[Forgot Password] Frontend URL validated.");
+   
 
     // 3. Find eligible local-password account.
     // Do not reveal whether an email is registered.
@@ -536,7 +535,7 @@ export const forgotPassword = async (req, res, next) => {
       });
     }
 
-    console.log("[Forgot Password] Eligible account found.");
+  
 
     // 4. Generate a secure, single-use reset token.
     const rawToken = crypto.randomBytes(32).toString("hex");
@@ -559,8 +558,7 @@ export const forgotPassword = async (req, res, next) => {
 
     await user.save();
 
-    console.log("[Forgot Password] Reset token saved.");
-
+  
     // 6. Send reset email.
     try {
       await sendEmail({
@@ -585,7 +583,7 @@ export const forgotPassword = async (req, res, next) => {
         text: `Reset your Formly password using this link: ${resetUrl.toString()}. This link expires in 15 minutes.`,
       });
 
-      console.log("[Forgot Password] Reset email sent successfully.");
+  
     } catch (emailError) {
       console.error(
         "[Forgot Password] Email delivery failed:",
@@ -598,7 +596,7 @@ export const forgotPassword = async (req, res, next) => {
 
       try {
         await user.save();
-        console.log("[Forgot Password] Unsent reset token invalidated.");
+    
       } catch (cleanupError) {
         console.error(
           "[Forgot Password] CRITICAL: Could not invalidate reset token:",

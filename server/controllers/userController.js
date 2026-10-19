@@ -18,8 +18,7 @@ export const updateProfile = async (req, res, next) => {
   try {
     const { name } = req.body;
     const updates = {};
-    console.log("Comming request")
-    console.log(name,req.file)
+    
 
     // Validate and update the user's name.
     if (name !== undefined) {
