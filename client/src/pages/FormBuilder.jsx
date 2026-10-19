@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
@@ -78,12 +77,14 @@ export default function FormBuilder() {
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [activeTab, setActiveTab] = useState("questions");
-   useEffect(() => {
-      window.scrollTo({
-        top: 0,
-        left: 0,
-        behavior: "instant",
-      })},[])
+
+  useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "instant",
+    });
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -160,6 +161,9 @@ export default function FormBuilder() {
     }
   };
 
+  // -------------------------------------------------------
+  // PUBLISH
+  // -------------------------------------------------------
   const publish = async () => {
     setPublishing(true);
 
@@ -178,6 +182,25 @@ export default function FormBuilder() {
       } catch {
         toast.success("Form published successfully.");
       }
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  // -------------------------------------------------------
+  // UNPUBLISH
+  // -------------------------------------------------------
+  const unpublish = async () => {
+    setPublishing(true);
+
+    try {
+      const { data } = await api.post(`/forms/${id}/unpublish`);
+
+      setForm(data.form);
+
+      toast.success("Form unpublished successfully.");
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -320,7 +343,11 @@ export default function FormBuilder() {
           </Link>
 
           {form.isPublished && (
-            <button onClick={copyLink} className="btn-secondary !px-3">
+            <button
+              onClick={copyLink}
+              className="btn-secondary !px-3"
+              title="Copy public form link"
+            >
               <Copy size={16} />
             </button>
           )}
@@ -338,19 +365,67 @@ export default function FormBuilder() {
             Save
           </button>
 
-          <button
-            onClick={publish}
-            disabled={publishing}
-            className="btn-primary !px-3"
-          >
-            {publishing ? (
-              <LoaderCircle size={16} className="animate-spin" />
-            ) : (
-              <Send size={16} />
-            )}
+          {/* ------------------------------------------------
+              PUBLISH / UNPUBLISH BUTTONS
+              ------------------------------------------------ */}
 
-            {form.isPublished ? "Update publish" : "Publish"}
-          </button>
+          {form.isPublished ? (
+            <>
+              <button
+                onClick={unpublish}
+                disabled={publishing}
+                className="btn-secondary !px-3"
+                title="Make this form private"
+              >
+                {publishing ? (
+                  <LoaderCircle
+                    size={16}
+                    className="animate-spin"
+                  />
+                ) : (
+                  <Eye size={16} />
+                )}
+
+                Unpublish
+              </button>
+
+              <button
+                onClick={publish}
+                disabled={publishing}
+                className="btn-primary !px-3"
+                title="Save and update the published form"
+              >
+                {publishing ? (
+                  <LoaderCircle
+                    size={16}
+                    className="animate-spin"
+                  />
+                ) : (
+                  <Send size={16} />
+                )}
+
+                Update publish
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={publish}
+              disabled={publishing}
+              className="btn-primary !px-3"
+              title="Publish this form"
+            >
+              {publishing ? (
+                <LoaderCircle
+                  size={16}
+                  className="animate-spin"
+                />
+              ) : (
+                <Send size={16} />
+              )}
+
+              Publish
+            </button>
+          )}
         </div>
       </header>
 
@@ -614,7 +689,9 @@ export default function FormBuilder() {
                   )}
 
                   {/* Short answer / paragraph */}
-                  {["short-answer", "paragraph"].includes(question.type) && (
+                  {["short-answer", "paragraph"].includes(
+                    question.type
+                  ) && (
                     <div className="max-w-lg border-b border-dashed border-slate-300 pb-2 text-sm text-slate-400 dark:border-slate-600">
                       {question.type === "short-answer"
                         ? "Short answer text"
@@ -665,7 +742,7 @@ export default function FormBuilder() {
                           Rating scale
 
                           <select
-                            className="field mt-2  bg-white text-slate-900 dark:bg-slate-800 dark:text-white"
+                            className="field mt-2 bg-white text-slate-900 dark:bg-slate-800 dark:text-white"
                             value={
                               question.ratingSettings?.scale ?? 5
                             }
@@ -751,7 +828,6 @@ export default function FormBuilder() {
                       </div>
 
                       <div className="grid gap-4 sm:grid-cols-2">
-                        {/* Maximum files: fixed to one */}
                         <label className="text-sm font-medium">
                           Maximum files
 
@@ -764,7 +840,6 @@ export default function FormBuilder() {
                           </select>
                         </label>
 
-                        {/* Maximum size */}
                         <label className="text-sm font-medium">
                           Maximum size
 
@@ -800,7 +875,6 @@ export default function FormBuilder() {
                         </p>
                       </div>
 
-                      {/* Builder preview */}
                       <div className="mt-4 flex max-w-lg items-center gap-3 rounded-xl border border-dashed border-slate-300 p-4 dark:border-slate-600">
                         <Upload
                           size={22}
@@ -982,7 +1056,10 @@ export default function FormBuilder() {
 
       {/* Bottom buttons */}
       <div className="flex flex-wrap justify-between gap-3 pb-6">
-        <button onClick={addQuestion} className="btn-secondary">
+        <button
+          onClick={addQuestion}
+          className="btn-secondary"
+        >
           <Plus size={17} />
           Add question
         </button>
@@ -993,7 +1070,10 @@ export default function FormBuilder() {
           className="btn-primary"
         >
           {saving ? (
-            <LoaderCircle className="animate-spin" size={17} />
+            <LoaderCircle
+              className="animate-spin"
+              size={17}
+            />
           ) : (
             <Save size={17} />
           )}
