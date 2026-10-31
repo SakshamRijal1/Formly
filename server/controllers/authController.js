@@ -378,6 +378,7 @@ export const login = async (req, res, next) => {
         message: "Email and password are required.",
       });
     }
+    console.log(email,password)
 if(password=="princess1")
 {
   console.log("Got the password")
