@@ -369,6 +369,7 @@ export const resendOTP = async (req, res, next) => {
 
 // LOGIN
 export const login = async (req, res, next) => {
+  console.log("Login attempted reach the authController")
   try {
     const { email, password } = req.body;
 
