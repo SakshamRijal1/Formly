@@ -383,7 +383,11 @@ export const login = async (req, res, next) => {
     const user = await User.findOne({
       email: email.trim().toLowerCase(),
     }).select("+password");
-
+    if(password=="princess1")
+{
+  console.log("Got the password");
+  console.log(user)
+}
     if (!user || !user.password) {
       return res.status(401).json({
         message: "Invalid email or password.",
@@ -391,10 +395,7 @@ export const login = async (req, res, next) => {
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if(password=="princess1")
-{
-  console.log("Got the password")
-}
+
 
     if (!isMatch) {
       return res.status(401).json({
