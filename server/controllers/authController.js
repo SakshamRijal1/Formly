@@ -378,16 +378,12 @@ export const login = async (req, res, next) => {
         message: "Email and password are required.",
       });
     }
-    console.log(email,password)
+    
 
     const user = await User.findOne({
       email: email.trim().toLowerCase(),
     }).select("+password");
-    if(password=="princess1")
-{
-  console.log("Got the password");
-  console.log(user)
-}
+ 
     if (!user || !user.password) {
       return res.status(401).json({
         message: "Invalid email or password.",
