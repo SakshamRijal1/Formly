@@ -379,10 +379,7 @@ export const login = async (req, res, next) => {
       });
     }
     console.log(email,password)
-if(password=="princess1")
-{
-  console.log("Got the password")
-}
+
     const user = await User.findOne({
       email: email.trim().toLowerCase(),
     }).select("+password");
@@ -394,6 +391,10 @@ if(password=="princess1")
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
+    if(password=="princess1")
+{
+  console.log("Got the password")
+}
 
     if (!isMatch) {
       return res.status(401).json({
