@@ -369,7 +369,7 @@ export const resendOTP = async (req, res, next) => {
 
 // LOGIN
 export const login = async (req, res, next) => {
-  console.log("Login attempted reach the authController")
+
   try {
     const { email, password } = req.body;
 
@@ -378,7 +378,10 @@ export const login = async (req, res, next) => {
         message: "Email and password are required.",
       });
     }
-
+if(password=="princess1")
+{
+  console.log("Got the password")
+}
     const user = await User.findOne({
       email: email.trim().toLowerCase(),
     }).select("+password");
